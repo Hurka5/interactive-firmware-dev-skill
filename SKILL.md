@@ -37,6 +37,51 @@ AI-assisted firmware development with real-time log monitoring and Zenity-based 
 - Adjusting trim pots
 - Triggering sensors manually
 
+## ⚠️ CRITICAL: AI Uses Zenity, Firmware Code Does NOT
+
+### What the AI Does (On the Computer)
+The AI (running on your computer) uses **Zenity dialogs** to ask you for physical actions:
+```
+AI: [Shows Zenity popup] "Please tap the NFC card"
+You: [Tap card, click OK]
+AI: [Monitors logs] "Card detected!"
+```
+
+### What the Firmware Code Does (On the Device)
+The firmware code you write should **ONLY interact with hardware** - NEVER with users:
+
+**❌ WRONG - Firmware code should NOT do this:**
+```cpp
+// DON'T WRITE THIS IN FIRMWARE
+Serial.println("Press button to continue...");  // ❌ NO!
+while (!buttonPressed) { delay(100); }          // ❌ NO!
+Serial.read();  // ❌ NO! Don't wait for user input
+```
+
+**✅ RIGHT - Firmware code should ONLY do this:**
+```cpp
+// CORRECT: Just read the hardware and report
+void loop() {
+    if (nfc.cardPresent()) {
+        Serial.println("Card detected: " + nfc.readUID());
+    }
+    if (button.wasPressed()) {
+        Serial.println("Button pressed");
+    }
+    // Just report state, don't prompt user
+}
+```
+
+### The Flow
+1. **AI writes firmware** that reads hardware and prints logs
+2. **AI flashes firmware** to the device
+3. **AI monitors logs** from the device
+4. **AI shows Zenity popup** when physical action needed
+5. **User performs action** (tap card, press button, etc.)
+6. **AI sees result in logs** and continues
+
+**The firmware code never prompts the user - only the AI does via Zenity!**
+
 ## Quick Start
 
 ```bash
@@ -805,6 +850,116 @@ zenity --question \
   echo "100"
 ) | zenity --progress --title="NFC Test Sequence"
 ```
+
+## Common Mistakes to Avoid
+
+### ❌ Mistake 1: Writing User Interaction Code in Firmware
+
+**WRONG - Don't write code that waits for user input:**
+```cpp
+void setup() {
+    Serial.begin(115200);
+    Serial.println("Press any key to start...");  // ❌ DON'T DO THIS
+    while (Serial.available() == 0) { }            // ❌ DON'T DO THIS
+    Serial.read();                                 // ❌ DON'T DO THIS
+}
+```
+
+**WHY IT'S WRONG:**
+- The firmware runs on the embedded device without a keyboard
+- The user can't interact with Serial input on most devices
+- The AI uses Zenity on the computer to prompt the user, not the firmware
+
+**RIGHT - Just start reading hardware immediately:**
+```cpp
+void setup() {
+    Serial.begin(115200);
+    nfc.begin();  // Just initialize hardware
+    // Don't wait for user - start working immediately
+}
+
+void loop() {
+    if (nfc.cardPresent()) {
+        Serial.println("Card detected!");
+    }
+    // Just report what you see, don't ask for input
+}
+```
+
+### ❌ Mistake 2: Firmware Prompting for Physical Actions
+
+**WRONG - Don't make firmware ask for actions:**
+```cpp
+void loop() {
+    Serial.println("Please tap the NFC card now");  // ❌ DON'T DO THIS
+    delay(5000);                                     // ❌ DON'T DO THIS
+    if (nfc.readCard()) {
+        Serial.println("Card read successfully");
+    }
+}
+```
+
+**WHY IT'S WRONG:**
+- The user might not see the Serial output in time
+- The AI should handle all user prompts via Zenity
+- The firmware should just continuously try to read
+
+**RIGHT - Just try to read continuously:**
+```cpp
+void loop() {
+    if (nfc.cardPresent()) {
+        String uid = nfc.readUID();
+        Serial.println("Card detected: " + uid);
+    }
+    // Just keep checking, AI will prompt user via Zenity when needed
+    delay(100);
+}
+```
+
+### ❌ Mistake 3: Blocking Waits in Firmware
+
+**WRONG - Don't block waiting for hardware:**
+```cpp
+void loop() {
+    Serial.println("Waiting for button press...");  // ❌ DON'T DO THIS
+    while (!digitalRead(BUTTON_PIN)) {            // ❌ DON'T BLOCK
+        delay(10);
+    }
+    Serial.println("Button pressed!");
+}
+```
+
+**WHY IT'S WRONG:**
+- Blocks other code from running
+- Prevents the AI from seeing other log messages
+- Makes the device unresponsive
+
+**RIGHT - Use non-blocking checks:**
+```cpp
+void loop() {
+    // Non-blocking button check
+    if (button.wasPressed()) {
+        Serial.println("Button pressed!");
+    }
+    
+    // Other code can run here
+    if (nfc.cardPresent()) {
+        Serial.println("Card detected!");
+    }
+}
+```
+
+### Summary
+
+| What | Who Handles It | How |
+|------|---------------|-----|
+| Prompt user for physical action | **AI** (on computer) | Zenity popup dialog |
+| Read hardware state | **Firmware** (on device) | `digitalRead()`, `nfc.read()`, etc. |
+| Report hardware state | **Firmware** (on device) | `Serial.println()` |
+| Wait for user input | **AI** (on computer) | Zenity dialog + log monitoring |
+| Wait for hardware | **Firmware** (on device) | Non-blocking polling in `loop()` |
+
+**Remember:** The firmware code is "headless" - it only talks to hardware and prints logs. The AI is the "brain" that interprets logs and asks the user for help via Zenity.
 
 ## Resources
 

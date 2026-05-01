@@ -2,6 +2,35 @@
 
 AI-assisted firmware development where you help by performing physical actions. The AI handles all the software work automatically and only asks for your help when it needs hands-on hardware interaction.
 
+## How It Works
+
+**Important distinction:**
+- The **AI** (running on your computer) shows popup dialogs using **Zenity** to ask for your help
+- The **firmware code** (running on your device) only reads hardware and prints logs - it never interacts with you directly
+
+```
+┌─────────────────┐         ┌──────────────────┐
+│   AI (Computer) │────────▶│  Zenity Popup    │
+│                 │         │  "Tap the card"  │
+│  - Monitors logs│         └────────┬─────────┘
+│  - Shows popups │                  │
+│  - Handles code │                  ▼
+└─────────────────┘         ┌──────────────────┐
+                            │     YOU          │
+                            │  (Tap card)      │
+                            └────────┬─────────┘
+                                     │
+┌─────────────────┐         ┌────────▼─────────┐
+│ Firmware (Device)│◀──────│  NFC Reader      │
+│                 │         │  detects card    │
+│  - Reads NFC    │         └──────────────────┘
+│  - Prints logs  │
+│  - NO user input│
+└─────────────────┘
+```
+
+The firmware code never prompts you - only the AI does via popup dialogs!
+
 ## Quick Install
 
 ```bash
