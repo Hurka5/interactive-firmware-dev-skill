@@ -19,7 +19,57 @@ AI-assisted firmware development with Zenity prompts for **physical actions only
 
 - **ESP-IDF**: ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6
 - **Arduino**: ESP32, ESP8266, AVR, ARM
-- **PlatformIO**: Universal embedded development (recommended for most projects)
+- **PlatformIO**: Universal embedded development (auto-detected)
+
+## Installation
+
+### Prerequisites
+
+1. **Zenity** - GTK dialog tool for prompts:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install zenity
+   
+   # Fedora
+   sudo dnf install zenity
+   
+   # Arch
+   sudo pacman -S zenity
+   ```
+
+2. **Python 3.7+** - For the session manager:
+   ```bash
+   # Usually pre-installed on most Linux distributions
+   python3 --version
+   ```
+
+3. **PlatformIO** (optional - AI will auto-install if needed):
+   ```bash
+   # Only needed if you want to use it manually
+   pip install platformio
+   ```
+
+### Install the Skill
+
+Clone the repository:
+```bash
+git clone https://github.com/Hurka5/interactive-firmware-dev-skill.git
+cd interactive-firmware-dev-skill
+```
+
+Make scripts executable:
+```bash
+chmod +x scripts/*.py scripts/*.sh
+```
+
+Test the installation:
+```bash
+# Test Zenity
+./scripts/zenity_prompt.sh --info "Test message"
+
+# Test log watcher (without device)
+./scripts/log_watcher.py --help
+```
 
 ## Quick Start
 
@@ -34,31 +84,6 @@ AI-assisted firmware development with Zenity prompts for **physical actions only
 # AI: "Card detected! UID: 0xA1B2C3D4"
 # AI: [Zenity] "Please remove the card"
 ```
-
-## Requirements
-
-- **Zenity**: GTK dialog tool (`sudo apt-get install zenity`)
-- **Python 3.7+**: For log watcher and session manager
-- **ESP-IDF, Arduino, or PlatformIO**: Depending on your platform
-- **Serial access**: User in `dialout` group
-
-### PlatformIO Installation (if using PlatformIO)
-
-```bash
-# Install PlatformIO Core
-pip install platformio
-
-# Verify installation
-pio --version
-```
-
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `interactive_session.py` | Main session manager - coordinates coding, building, flashing, monitoring, **physical prompts only** |
-| `log_watcher.py` | Log monitoring with pattern detection |
-| `zenity_prompt.sh` | Zenity wrapper with physical action templates |
 
 ## Physical Action Categories
 
@@ -113,6 +138,7 @@ pio --version
 "Retrying with new baud rate..."          → AI retries
 "Analyzing crash log..."                  → AI parses
 "Applying code fix..."                    → AI edits code
+"Installing PlatformIO..."                  → AI installs via pip
 ```
 
 ### ✅ AI Prompts User (Physical Only)
@@ -126,25 +152,17 @@ pio --version
 "Connect the sensor module to the I2C pins"
 ```
 
-## Platform Support Details
+## Platform Support
 
-### ESP-IDF Projects
-- Detected by: `CMakeLists.txt` + `sdkconfig`
-- Build: `idf.py build`
-- Flash: `idf.py flash --port /dev/ttyUSB0`
-- Monitor: `idf.py monitor`
+The skill auto-detects your project type:
 
-### PlatformIO Projects
-- Detected by: `platformio.ini`
-- Build: `pio run`
-- Flash: `pio run --target upload --upload-port /dev/ttyUSB0`
-- Monitor: `pio device monitor`
-- **Auto-installs PlatformIO if missing**
+| Platform | Detected By | Build | Flash |
+|----------|-------------|-------|-------|
+| **PlatformIO** | `platformio.ini` | `pio run` | `pio run --target upload` |
+| **ESP-IDF** | `CMakeLists.txt` + `sdkconfig` | `idf.py build` | `idf.py flash` |
+| **Arduino** | `*.ino` files | `pio run` or `make` | `pio run --target upload` |
 
-### Arduino Projects
-- Detected by: `*.ino` files
-- Build: `pio run` (via PlatformIO) or `arduino-cli`
-- Flash: PlatformIO upload or `make upload`
+PlatformIO will be automatically installed if needed.
 
 ## Zenity Dialog Examples
 
@@ -196,9 +214,17 @@ AI: Log: "Card removed. Waiting..."
 [Zenity] "✓ Test complete!"
 ```
 
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `interactive_session.py` | Main session manager - coordinates building, flashing, monitoring, **physical prompts only** |
+| `log_watcher.py` | Log monitoring with pattern detection |
+| `zenity_prompt.sh` | Zenity wrapper with physical action templates |
+
 ## Resources
 
-- **SKILL.md** - Main skill instructions for AI (includes PlatformIO installation)
+- **SKILL.md** - Main skill instructions for AI
 - **references/decision-matrix.md** - Physical vs software guidelines
 - **references/physical-action-templates.md** - Ready-to-use Zenity templates
 - **references/log-patterns.md** - Common log patterns
@@ -213,6 +239,7 @@ AI: Log: "Card removed. Waiting..."
 | Config changes | AI (software) |
 | Log analysis | AI (software) |
 | Code fixes | AI (software) |
+| PlatformIO install | AI (software) |
 | Move NFC card | **User (physical)** |
 | Rotate encoder | **User (physical)** |
 | Press button | **User (physical)** |
