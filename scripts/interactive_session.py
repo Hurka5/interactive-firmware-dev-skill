@@ -747,11 +747,10 @@ class InteractiveSession:
     
     def start_monitoring(self):
         """
-        Start the log monitoring phase.
+        Start the log monitoring phase in a background thread.
         
-        This runs continuously, watching for patterns in the logs.
-        When patterns are detected, it decides whether to prompt user
-        (physical action) or handle automatically (software action).
+        Logs are watched in a separate thread so Zenity prompts can be
+        shown from the main thread without blocking log output.
         """
         self.state = SessionState.MONITORING
         self._log_event("monitoring_started", {"patterns": self.config.patterns})
@@ -775,8 +774,10 @@ class InteractiveSession:
         # Show info on console (not zenity)
         print(f"Monitoring started on {self.config.port}")
         print(f"Watching for: {', '.join(self.config.patterns)}")
+        print("Logs will appear below. Press Ctrl+C to stop.")
+        print("-" * 60)
         
-        # Start watching (blocks until interrupted)
+        # Start watching in background thread
         self.watcher.start()
     
     def run(self):
@@ -786,9 +787,14 @@ class InteractiveSession:
         Main entry point that coordinates:
         1. Initial setup and info
         2. Build and flash (software actions)
-        3. Start monitoring
-        4. Handle detected patterns
+        3. Start monitoring (in background thread)
+        4. Process matches and show Zenity prompts (in main thread)
+        
+        This design allows logs to continue printing while Zenity
+        dialogs are shown for physical actions.
         """
+        import time
+        
         # Print session info to console (not zenity)
         print("=" * 60)
         print("Interactive Firmware Development Session")
@@ -808,8 +814,26 @@ class InteractiveSession:
             print("ERROR: Initial build/flash failed. Exiting.", file=sys.stderr)
             sys.exit(1)
         
-        # Start monitoring
+        # Start monitoring in background thread
         self.start_monitoring()
+        
+        # Main loop - process matches and keep session alive
+        # This runs in the main thread so Zenity can work properly
+        try:
+            while self.watcher and self.watcher.running:
+                # Process any pending matches (may trigger Zenity prompts)
+                if self.watcher:
+                    self.watcher.process_matches()
+                
+                # Small delay to prevent CPU spinning
+                time.sleep(0.1)
+                
+        except KeyboardInterrupt:
+            print("\nInterrupted by user")
+        finally:
+            if self.watcher:
+                self.watcher.stop()
+            print("\nSession ended.")
 
 
 def main():

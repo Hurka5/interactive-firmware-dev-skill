@@ -2,6 +2,7 @@
 """
 Log Watcher for Interactive Firmware Development
 Monitors serial logs and triggers callbacks when patterns are detected.
+Runs in a separate thread so Zenity prompts can work concurrently.
 """
 
 import subprocess
@@ -11,6 +12,8 @@ import json
 import time
 import signal
 import argparse
+import threading
+import queue
 from pathlib import Path
 from typing import List, Dict, Callable, Optional, Pattern
 from dataclasses import dataclass, asdict
@@ -47,7 +50,7 @@ class LogMatch:
 
 
 class LogWatcher:
-    """Watches firmware logs and detects patterns."""
+    """Watches firmware logs and detects patterns in a background thread."""
     
     # Default patterns for ESP-IDF
     ESP_IDF_PATTERNS = {
@@ -93,6 +96,8 @@ class LogWatcher:
         self.on_match = on_match
         self.running = False
         self.process: Optional[subprocess.Popen] = None
+        self.watch_thread: Optional[threading.Thread] = None
+        self.match_queue: queue.Queue = queue.Queue()
         
         # Build pattern list
         self.patterns: Dict[str, tuple] = {}
@@ -116,6 +121,7 @@ class LogWatcher:
         
         # Context buffer
         self.context_buffer: List[str] = []
+        self.buffer_lock = threading.Lock()
         
         # Statistics
         self.match_count: Dict[str, int] = {name: 0 for name in self.patterns}
@@ -152,26 +158,25 @@ class LogWatcher:
         for name, (regex, level) in self.compiled_patterns.items():
             if regex.search(line):
                 self.match_count[name] += 1
-                return LogMatch(
-                    timestamp=datetime.now().isoformat(),
-                    level=level,
-                    pattern=name,
-                    log_line=line.rstrip(),
-                    context=self.context_buffer.copy()
-                )
+                with self.buffer_lock:
+                    return LogMatch(
+                        timestamp=datetime.now().isoformat(),
+                        level=level,
+                        pattern=name,
+                        log_line=line.rstrip(),
+                        context=self.context_buffer.copy()
+                    )
         return None
     
     def _update_context(self, line: str):
         """Update the context buffer."""
-        self.context_buffer.append(line.rstrip())
-        if len(self.context_buffer) > self.context_lines:
-            self.context_buffer.pop(0)
+        with self.buffer_lock:
+            self.context_buffer.append(line.rstrip())
+            if len(self.context_buffer) > self.context_lines:
+                self.context_buffer.pop(0)
     
-    def start(self):
-        """Start watching logs."""
-        self.running = True
-        self.start_time = datetime.now()
-        
+    def _watch_loop(self):
+        """Background thread that watches logs."""
         cmd = self._get_monitor_command()
         print(f"Starting log watcher: {' '.join(cmd)}")
         print(f"Monitoring patterns: {', '.join(self.patterns.keys())}")
@@ -191,8 +196,8 @@ class LogWatcher:
                 if not self.running:
                     break
                 
-                # Print the line
-                print(line, end='')
+                # Print the line immediately
+                print(line, end='', flush=True)
                 
                 # Update context buffer
                 self._update_context(line)
@@ -200,14 +205,41 @@ class LogWatcher:
                 # Check for pattern matches
                 match = self._check_patterns(line)
                 if match and self.on_match:
-                    self.on_match(match)
+                    # Put match in queue for main thread to handle
+                    self.match_queue.put(match)
                     
-        except KeyboardInterrupt:
-            print("\nInterrupted by user")
         except Exception as e:
-            print(f"\nError: {e}", file=sys.stderr)
+            print(f"\nLog watcher error: {e}", file=sys.stderr)
         finally:
-            self.stop()
+            if self.process:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+    
+    def start(self):
+        """Start watching logs in a background thread."""
+        self.running = True
+        self.start_time = datetime.now()
+        
+        # Start the watcher thread
+        self.watch_thread = threading.Thread(target=self._watch_loop, daemon=True)
+        self.watch_thread.start()
+    
+    def process_matches(self):
+        """
+        Process any pending matches in the queue.
+        Call this periodically from the main thread to handle matches
+        (including showing Zenity dialogs).
+        """
+        try:
+            while True:
+                match = self.match_queue.get_nowait()
+                if self.on_match:
+                    self.on_match(match)
+        except queue.Empty:
+            pass
     
     def stop(self):
         """Stop watching logs."""
@@ -218,6 +250,8 @@ class LogWatcher:
                 self.process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self.process.kill()
+        if self.watch_thread and self.watch_thread.is_alive():
+            self.watch_thread.join(timeout=5)
     
     def get_stats(self) -> Dict:
         """Get watching statistics."""
@@ -334,8 +368,18 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    # Start watching
+    # Start watching in background thread
     watcher.start()
+    
+    # Main loop - process matches and keep thread alive
+    try:
+        while watcher.running:
+            watcher.process_matches()
+            time.sleep(0.1)  # Small delay to prevent CPU spinning
+    except KeyboardInterrupt:
+        pass
+    finally:
+        watcher.stop()
     
     # Print stats on normal exit
     if args.stats:
