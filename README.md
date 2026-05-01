@@ -15,13 +15,19 @@ AI-assisted firmware development with Zenity prompts for **physical actions only
 | Analyzing logs | Connecting hardware |
 | Applying fixes | Triggering sensors |
 
+## Supported Platforms
+
+- **ESP-IDF**: ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6
+- **Arduino**: ESP32, ESP8266, AVR, ARM
+- **PlatformIO**: Universal embedded development (recommended for most projects)
+
 ## Quick Start
 
 ```bash
 # Start interactive session - AI only prompts for physical actions
 ./scripts/interactive_session.py --project ./my_project --port /dev/ttyUSB0
 
-# Example: NFC testing
+# Example: NFC card testing
 # AI: "Building... Flashing... Monitoring..."
 # AI: [Zenity] "Please tap the NFC card on the reader"
 # User: [Taps card, clicks OK]
@@ -33,8 +39,18 @@ AI-assisted firmware development with Zenity prompts for **physical actions only
 
 - **Zenity**: GTK dialog tool (`sudo apt-get install zenity`)
 - **Python 3.7+**: For log watcher and session manager
-- **ESP-IDF or Arduino**: Depending on your platform
+- **ESP-IDF, Arduino, or PlatformIO**: Depending on your platform
 - **Serial access**: User in `dialout` group
+
+### PlatformIO Installation (if using PlatformIO)
+
+```bash
+# Install PlatformIO Core
+pip install platformio
+
+# Verify installation
+pio --version
+```
 
 ## Scripts
 
@@ -74,6 +90,7 @@ AI-assisted firmware development with Zenity prompts for **physical actions only
 ### 5. Sensor Triggering
 - Wave hand in front of motion sensor
 - Cover/uncover light sensor
+- Shine light on sensor
 - Blow on temperature sensor
 - Move magnet near hall sensor
 - Press on pressure sensor
@@ -108,6 +125,26 @@ AI-assisted firmware development with Zenity prompts for **physical actions only
 "Wave your hand in front of the PIR sensor"
 "Connect the sensor module to the I2C pins"
 ```
+
+## Platform Support Details
+
+### ESP-IDF Projects
+- Detected by: `CMakeLists.txt` + `sdkconfig`
+- Build: `idf.py build`
+- Flash: `idf.py flash --port /dev/ttyUSB0`
+- Monitor: `idf.py monitor`
+
+### PlatformIO Projects
+- Detected by: `platformio.ini`
+- Build: `pio run`
+- Flash: `pio run --target upload --upload-port /dev/ttyUSB0`
+- Monitor: `pio device monitor`
+- **Auto-installs PlatformIO if missing**
+
+### Arduino Projects
+- Detected by: `*.ino` files
+- Build: `pio run` (via PlatformIO) or `arduino-cli`
+- Flash: PlatformIO upload or `make upload`
 
 ## Zenity Dialog Examples
 
@@ -161,8 +198,8 @@ AI: Log: "Card removed. Waiting..."
 
 ## Resources
 
-- **SKILL.md** - Main skill instructions for AI
-- **references/decision-matrix.md** - When to prompt vs auto-handle
+- **SKILL.md** - Main skill instructions for AI (includes PlatformIO installation)
+- **references/decision-matrix.md** - Physical vs software guidelines
 - **references/physical-action-templates.md** - Ready-to-use Zenity templates
 - **references/log-patterns.md** - Common log patterns
 - **examples/nfc-testing-session.md** - Complete NFC test walkthrough
@@ -182,6 +219,22 @@ AI: Log: "Card removed. Waiting..."
 | Power cycle | **User (physical)** |
 | Connect hardware | **User (physical)** |
 | Trigger sensor | **User (physical)** |
+
+## Command Reference
+
+```bash
+# Start interactive session (auto-detects platform)
+./scripts/interactive_session.py --project ./my_project --port /dev/ttyUSB0
+
+# Specify platform explicitly
+./scripts/interactive_session.py --project ./my_project --platform platformio
+
+# Watch logs only (no interaction)
+./scripts/log_watcher.py --port /dev/ttyUSB0 --patterns "error,warning"
+
+# Manual zenity prompt
+./scripts/zenity_prompt.sh --question "Continue testing?"
+```
 
 ## Trigger Phrases
 

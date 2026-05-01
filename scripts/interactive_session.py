@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
 """
 Interactive Firmware Development Session Manager
+
 Coordinates AI coding, building, flashing, and user interaction via Zenity.
+This script manages the full workflow:
+1. Detects project type (ESP-IDF, Arduino, PlatformIO)
+2. Builds and flashes firmware automatically (software actions)
+3. Monitors serial logs for patterns
+4. Prompts user via Zenity ONLY for physical actions
+
+Physical actions (user handles):
+- Moving NFC cards, rotating encoders, pressing buttons
+- Power cycling, connecting hardware, triggering sensors
+
+Software actions (AI handles automatically):
+- Building, flashing, resetting, config changes
 """
 
 import subprocess
@@ -13,23 +26,23 @@ import os
 import re
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, List, Dict, Callable
-from dataclasses import dataclass, asdict, field
+from typing import Optional, List, Dict, Callable, Tuple
+from dataclasses import dataclass, asdict
 from enum import Enum
 
-# Import log watcher
+# Import log watcher from same directory
 sys.path.insert(0, str(Path(__file__).parent))
 from log_watcher import LogWatcher, LogMatch, LogLevel
 
 
 class SessionState(Enum):
-    """Session states."""
+    """States the interactive session can be in."""
     INITIALIZING = "initializing"
     CODING = "coding"
     BUILDING = "building"
     FLASHING = "flashing"
     MONITORING = "monitoring"
-    WAITING_USER = "waiting_user"
+    WAITING_USER = "waiting_user"  # Waiting for physical action
     APPLYING_FIX = "applying_fix"
     COMPLETED = "completed"
     ERROR = "error"
@@ -37,7 +50,7 @@ class SessionState(Enum):
 
 @dataclass
 class SessionEvent:
-    """Session event record."""
+    """Records what happened during the session."""
     timestamp: str
     state: str
     event_type: str
@@ -47,19 +60,24 @@ class SessionEvent:
 
 @dataclass
 class SessionConfig:
-    """Session configuration."""
+    """Configuration for the interactive session."""
     project_path: str
     port: str
     baud: int
     target: str
-    platform: str
+    platform: str  # "esp-idf", "arduino", "platformio"
     patterns: List[str]
     auto_fix: bool
     session_file: Optional[str] = None
 
 
 class InteractiveSession:
-    """Manages an interactive firmware development session."""
+    """
+    Manages an interactive firmware development session.
+    
+    Key principle: AI handles all software actions automatically.
+    Only prompts user for physical actions it cannot perform.
+    """
     
     def __init__(self, config: SessionConfig):
         self.config = config
@@ -70,11 +88,11 @@ class InteractiveSession:
         self.fix_attempts = 0
         self.max_fix_attempts = 5
         
-        # Zenity script path
+        # Path to zenity helper script
         self.zenity_script = Path(__file__).parent / "zenity_prompt.sh"
     
     def _log_event(self, event_type: str, details: Dict, user_action: Optional[str] = None):
-        """Log a session event."""
+        """Record an event in the session history."""
         event = SessionEvent(
             timestamp=datetime.now().isoformat(),
             state=self.state.value,
@@ -86,7 +104,7 @@ class InteractiveSession:
         self._save_session()
     
     def _save_session(self):
-        """Save session state to file."""
+        """Save session state to JSON file for persistence."""
         if self.config.session_file:
             session_data = {
                 "session_id": self.session_id,
@@ -105,8 +123,19 @@ class InteractiveSession:
             with open(self.config.session_file, 'w') as f:
                 json.dump(session_data, f, indent=2)
     
-    def _zenity(self, dialog_type: str, *args, timeout: Optional[int] = None) -> tuple:
-        """Execute a zenity dialog and return result."""
+    def _zenity(self, dialog_type: str, *args, timeout: Optional[int] = None) -> Tuple[int, str]:
+        """
+        Execute a zenity dialog and return result.
+        
+        Args:
+            dialog_type: Type of dialog (info, error, question, entry, list, scale)
+            args: Arguments for the dialog
+            timeout: Optional timeout in seconds
+            
+        Returns:
+            Tuple of (exit_code, output_text)
+            Exit codes: 0=success/yes, 1=cancel/no, 5=timeout
+        """
         cmd = [str(self.zenity_script), f"--{dialog_type}"] + list(args)
         if timeout:
             cmd.extend(["--timeout", str(timeout)])
@@ -126,27 +155,27 @@ class InteractiveSession:
             return (1, "")
     
     def _show_info(self, message: str):
-        """Show info dialog."""
+        """Show an information dialog to the user."""
         self._zenity("info", message)
     
     def _show_error(self, message: str):
-        """Show error dialog."""
+        """Show an error dialog to the user."""
         self._zenity("error", message)
     
     def _ask_yes_no(self, question: str, timeout: Optional[int] = None) -> bool:
-        """Ask yes/no question."""
+        """Ask user a yes/no question. Returns True if yes/OK."""
         code, _ = self._zenity("question", question, timeout=timeout)
         return code == 0
     
     def _ask_choice(self, question: str, options: List[str], timeout: Optional[int] = None) -> Optional[str]:
-        """Ask user to choose from list."""
+        """Ask user to choose from a list of options."""
         code, choice = self._zenity("list", question, *options, timeout=timeout)
         if code == 0:
             return choice
         return None
     
     def _ask_input(self, prompt: str, default: str = "") -> Optional[str]:
-        """Ask for text input."""
+        """Ask user for text input."""
         args = [prompt]
         if default:
             args.append(default)
@@ -156,7 +185,7 @@ class InteractiveSession:
         return None
     
     def _ask_number(self, prompt: str, min_val: int, max_val: int, default: int) -> Optional[int]:
-        """Ask for numeric input via scale."""
+        """Ask user for a number using a scale slider."""
         code, value = self._zenity("scale", prompt, str(min_val), str(max_val), str(default))
         if code == 0 and value:
             try:
@@ -166,18 +195,24 @@ class InteractiveSession:
         return None
     
     def _handle_log_match(self, match: LogMatch):
-        """Handle a detected log pattern match."""
+        """
+        Handle a detected log pattern match.
+        
+        This is called when the log watcher detects a pattern.
+        It decides whether to prompt the user (physical action)
+        or handle automatically (software action).
+        """
         self.state = SessionState.WAITING_USER
         
         # Log the detection
         self._log_event("pattern_detected", match.to_dict())
         
-        # Build context message
+        # Build context message from recent log lines
         context_msg = ""
         if match.context:
             context_msg = "\n\nRecent context:\n" + "\n".join(match.context[-3:])
         
-        # Handle based on severity
+        # Handle based on severity level
         if match.level == LogLevel.FATAL:
             self._handle_fatal_error(match, context_msg)
         elif match.level == LogLevel.ERROR:
@@ -188,7 +223,12 @@ class InteractiveSession:
             self._handle_info_match(match, context_msg)
     
     def _handle_fatal_error(self, match: LogMatch, context_msg: str):
-        """Handle fatal error (panic, crash)."""
+        """
+        Handle fatal errors (panics, crashes).
+        
+        For fatal errors, we may need physical intervention
+        like hardware reset if software reset fails.
+        """
         message = f"FATAL ERROR DETECTED\n\nPattern: {match.pattern}\nLine: {match.log_line}{context_msg}\n\nWhat would you like to do?"
         
         choice = self._ask_choice(message, [
@@ -207,6 +247,7 @@ class InteractiveSession:
             self._modify_stack_size()
         elif choice == "Check hardware connections":
             self._log_event("user_decision", {"pattern": match.pattern}, "check_hardware")
+            # PHYSICAL ACTION: User checks hardware
             self._show_info("Please check:\n- Power supply\n- USB cable\n- Boot/reset connections\n- Peripheral wiring")
             if self._ask_yes_no("Hardware checked. Retry?"):
                 self._restart_monitoring()
@@ -217,7 +258,12 @@ class InteractiveSession:
             self._abort_session("User aborted after fatal error")
     
     def _handle_error(self, match: LogMatch, context_msg: str):
-        """Handle regular error."""
+        """
+        Handle regular errors.
+        
+        Most errors are handled automatically by the AI.
+        Only prompt user if physical action is needed.
+        """
         message = f"ERROR DETECTED\n\nPattern: {match.pattern}\nLine: {match.log_line}{context_msg}\n\nWhat would you like to do?"
         
         choice = self._ask_choice(message, [
@@ -229,6 +275,7 @@ class InteractiveSession:
         ], timeout=60)
         
         if choice == "Fix the issue automatically":
+            # SOFTWARE ACTION: AI fixes automatically
             self._log_event("user_decision", {"pattern": match.pattern}, "auto_fix")
             self._apply_fix(match, "error")
         elif choice == "Show me the code to fix":
@@ -238,13 +285,14 @@ class InteractiveSession:
             self._log_event("user_decision", {"pattern": match.pattern}, "ignore")
             self.state = SessionState.MONITORING
         elif choice == "Edit configuration":
+            # SOFTWARE ACTION: AI updates config
             self._log_event("user_decision", {"pattern": match.pattern}, "edit_config")
             self._edit_configuration(match)
         else:
             self._abort_session("User aborted")
     
     def _handle_warning(self, match: LogMatch, context_msg: str):
-        """Handle warning."""
+        """Handle warnings - usually handled automatically."""
         if not self.config.auto_fix:
             return
         
@@ -267,13 +315,25 @@ class InteractiveSession:
             self._log_event("user_decision", {"pattern": match.pattern}, "continue")
     
     def _handle_info_match(self, match: LogMatch, context_msg: str):
-        """Handle info-level match (checkpoint, etc)."""
+        """
+        Handle info-level matches (checkpoints).
+        
+        These often require physical user action like:
+        - "Tap card now"
+        - "Press button"
+        - "Remove card"
+        """
         message = f"CHECKPOINT\n\n{match.log_line}{context_msg}\n\nContinue?"
         if not self._ask_yes_no(message, timeout=30):
             self._abort_session("User stopped at checkpoint")
     
     def _apply_fix(self, match: LogMatch, severity: str):
-        """Apply a fix based on the detected pattern."""
+        """
+        Apply a fix based on the detected pattern.
+        
+        This is a SOFTWARE ACTION - AI handles it automatically.
+        No user prompt needed for software fixes.
+        """
         self.state = SessionState.APPLYING_FIX
         self.fix_attempts += 1
         
@@ -282,7 +342,7 @@ class InteractiveSession:
             self._abort_session("Too many fix attempts")
             return
         
-        # Pattern-specific fixes
+        # Pattern-specific fixes - all handled automatically
         fix_applied = False
         
         if match.pattern == "wifi_fail":
@@ -296,7 +356,7 @@ class InteractiveSession:
         elif match.pattern == "watchdog":
             fix_applied = self._fix_watchdog_issue(match)
         else:
-            # Generic fix - ask user what to do
+            # No automatic fix available
             self._show_info(f"No automatic fix available for {match.pattern}. Please fix manually and retry.")
             if self._ask_yes_no("Retry monitoring?"):
                 self._restart_monitoring()
@@ -314,7 +374,7 @@ class InteractiveSession:
             self.state = SessionState.MONITORING
     
     def _fix_wifi_issue(self, match: LogMatch) -> bool:
-        """Fix Wi-Fi connection issues."""
+        """Fix Wi-Fi connection issues - SOFTWARE ACTION."""
         choice = self._ask_choice("Wi-Fi connection failed. What would you like to do?", [
             "Enter new SSID/password",
             "Increase timeout",
@@ -326,7 +386,7 @@ class InteractiveSession:
             ssid = self._ask_input("Enter Wi-Fi SSID:", "MyNetwork")
             if ssid:
                 password = self._ask_input("Enter Wi-Fi password:", "")
-                # Update config file
+                # SOFTWARE ACTION: Update config file
                 self._update_wifi_config(ssid, password)
                 return True
         elif choice == "Increase timeout":
@@ -338,7 +398,7 @@ class InteractiveSession:
         return False
     
     def _fix_i2c_issue(self, match: LogMatch) -> bool:
-        """Fix I2C communication issues."""
+        """Fix I2C communication issues - SOFTWARE ACTION."""
         choice = self._ask_choice("I2C communication failed. What would you like to do?", [
             "Try alternate address",
             "Change SDA/SCL pins",
@@ -349,20 +409,27 @@ class InteractiveSession:
         if choice == "Try alternate address":
             addr = self._ask_input("Enter I2C address (hex, e.g., 0x77):", "0x77")
             if addr:
+                # SOFTWARE ACTION: Update config
                 self._update_config_value("I2C_ADDRESS", addr)
                 return True
         elif choice == "Change SDA/SCL pins":
             sda = self._ask_number("SDA pin:", 0, 48, 21)
             scl = self._ask_number("SCL pin:", 0, 48, 22)
             if sda is not None and scl is not None:
+                # SOFTWARE ACTION: Update config
                 self._update_config_value("I2C_SDA_PIN", str(sda))
                 self._update_config_value("I2C_SCL_PIN", str(scl))
                 return True
         elif choice == "Reduce I2C speed":
             speed = self._ask_number("I2C frequency (Hz):", 10000, 1000000, 100000)
             if speed:
+                # SOFTWARE ACTION: Update config
                 self._update_config_value("I2C_FREQUENCY", str(speed))
                 return True
+        elif choice == "Check wiring diagram":
+            # PHYSICAL ACTION: User checks hardware
+            self._show_info("Please check:\n- SDA/SCL connections\n- Pull-up resistors (4.7kΩ)\n- Power supply to sensor")
+            return self._ask_yes_no("Wiring checked. Retry?")
         
         return False
     
@@ -375,22 +442,27 @@ class InteractiveSession:
             "Use mock sensor data"
         ])
         
-        if choice == "Try alternate I2C address":
+        if choice == "Check sensor power/wiring":
+            # PHYSICAL ACTION: User checks hardware
+            self._show_info("Please check:\n- VCC and GND connections\n- Sensor power LED\n- Cable connections")
+            return self._ask_yes_no("Hardware checked. Retry?")
+        elif choice == "Try alternate I2C address":
             return self._fix_i2c_issue(match)
         elif choice == "Use mock sensor data":
+            # SOFTWARE ACTION: Enable mock mode
             self._update_config_value("USE_MOCK_SENSOR", "1")
             return True
         elif choice == "Skip sensor and continue":
+            # SOFTWARE ACTION: Disable sensor
             self._update_config_value("SENSOR_ENABLED", "0")
             return True
         
         return False
     
     def _fix_heap_issue(self, match: LogMatch) -> bool:
-        """Fix low heap memory issues."""
+        """Fix low heap memory issues - SOFTWARE ACTION."""
         choice = self._ask_choice("Low heap memory detected. What would you like to do?", [
             "Reduce buffer sizes",
-            "Increase task stack sizes",
             "Enable PSRAM if available",
             "Show memory analysis"
         ])
@@ -398,16 +470,18 @@ class InteractiveSession:
         if choice == "Reduce buffer sizes":
             factor = self._ask_number("Buffer reduction factor (%):", 10, 90, 50)
             if factor:
+                # SOFTWARE ACTION: Update config
                 self._update_config_value("BUFFER_SIZE_FACTOR", str(factor))
                 return True
         elif choice == "Enable PSRAM if available":
+            # SOFTWARE ACTION: Enable PSRAM
             self._update_config_value("PSRAM_ENABLED", "1")
             return True
         
         return False
     
     def _fix_watchdog_issue(self, match: LogMatch) -> bool:
-        """Fix watchdog timeout issues."""
+        """Fix watchdog timeout issues - SOFTWARE ACTION."""
         choice = self._ask_choice("Watchdog timeout detected. What would you like to do?", [
             "Increase watchdog timeout",
             "Add yield() calls in loops",
@@ -417,6 +491,7 @@ class InteractiveSession:
         if choice == "Increase watchdog timeout":
             timeout = self._ask_number("Watchdog timeout (seconds):", 1, 60, 5)
             if timeout:
+                # SOFTWARE ACTION: Update config
                 self._update_config_value("WATCHDOG_TIMEOUT", str(timeout))
                 return True
         elif choice == "Add yield() calls in loops":
@@ -426,7 +501,7 @@ class InteractiveSession:
         return False
     
     def _update_wifi_config(self, ssid: str, password: str):
-        """Update Wi-Fi configuration in project."""
+        """Update Wi-Fi configuration in project - SOFTWARE ACTION."""
         # Look for common config files
         config_files = [
             Path(self.config.project_path) / "config.h",
@@ -445,7 +520,7 @@ class InteractiveSession:
                 return
     
     def _update_config_value(self, key: str, value: str):
-        """Update a configuration value."""
+        """Update a configuration value - SOFTWARE ACTION."""
         config_files = [
             Path(self.config.project_path) / "config.h",
             Path(self.config.project_path) / "main" / "config.h",
@@ -464,30 +539,154 @@ class InteractiveSession:
                 config_file.write_text(content)
                 return
     
-    def _build_and_flash(self) -> bool:
-        """Build and flash the firmware."""
-        self.state = SessionState.BUILDING
+    def _detect_platform(self) -> str:
+        """
+        Auto-detect the project platform type.
         
-        # Determine build command
-        if self.config.platform == "esp-idf":
+        Returns:
+            str: "esp-idf", "platformio", "arduino", or "generic"
+        """
+        project_path = Path(self.config.project_path)
+        
+        # Check for PlatformIO
+        if (project_path / "platformio.ini").exists():
+            return "platformio"
+        
+        # Check for ESP-IDF
+        if (project_path / "CMakeLists.txt").exists() and (project_path / "sdkconfig").exists():
+            return "esp-idf"
+        
+        # Check for Arduino
+        if list(project_path.glob("*.ino")):
+            return "arduino"
+        
+        # Default to generic
+        return "generic"
+    
+    def _install_platformio(self) -> bool:
+        """
+        Install PlatformIO if not already installed.
+        
+        Returns:
+            bool: True if installation successful or already installed
+        """
+        # Check if already installed
+        result = subprocess.run(["which", "pio"], capture_output=True)
+        if result.returncode == 0:
+            return True
+        
+        # Try to install PlatformIO
+        self._show_info("PlatformIO not found. Installing...")
+        
+        install_methods = [
+            ["pip", "install", "platformio"],
+            ["pip3", "install", "platformio"],
+        ]
+        
+        for method in install_methods:
+            result = subprocess.run(method, capture_output=True, text=True)
+            if result.returncode == 0:
+                # Verify installation
+                verify = subprocess.run(["pio", "--version"], capture_output=True)
+                if verify.returncode == 0:
+                    return True
+        
+        return False
+    
+    def _get_build_commands(self) -> Tuple[List[str], List[str]]:
+        """
+        Get the build and flash commands for the current platform.
+        
+        Returns:
+            Tuple of (build_command, flash_command) as lists
+        """
+        platform = self.config.platform
+        
+        if platform == "esp-idf":
+            # ESP-IDF uses idf.py
             build_cmd = ["idf.py", "build"]
             flash_cmd = ["idf.py", "flash", "--port", self.config.port]
+            
+        elif platform == "platformio":
+            # PlatformIO uses pio
+            build_cmd = ["pio", "run"]
+            flash_cmd = ["pio", "run", "--target", "upload", "--upload-port", self.config.port]
+            
+        elif platform == "arduino":
+            # Arduino uses platformio or arduino-cli
+            if self._command_exists("pio"):
+                build_cmd = ["pio", "run"]
+                flash_cmd = ["pio", "run", "--target", "upload", "--upload-port", self.config.port]
+            else:
+                # Fallback to make
+                build_cmd = ["make"]
+                flash_cmd = ["make", "upload"]
         else:
-            # Arduino or other platforms
-            build_cmd = ["make"]  # Adjust as needed
-            flash_cmd = ["make", "upload"]  # Adjust as needed
+            # Generic fallback
+            build_cmd = ["make"]
+            flash_cmd = ["make", "flash"]
+        
+        return build_cmd, flash_cmd
+    
+    def _command_exists(self, cmd: str) -> bool:
+        """Check if a command exists on the system."""
+        try:
+            subprocess.run(["which", cmd], capture_output=True, check=True)
+            return True
+        except subprocess.CalledProcessError:
+            return False
+    
+    def _build_and_flash(self) -> bool:
+        """
+        Build and flash the firmware - SOFTWARE ACTION.
+        
+        This is handled automatically by the AI without user prompts.
+        Supports ESP-IDF, PlatformIO, and Arduino.
+        
+        Returns:
+            bool: True if successful
+        """
+        self.state = SessionState.BUILDING
+        
+        # Auto-detect platform if not specified
+        if self.config.platform == "generic":
+            detected = self._detect_platform()
+            if detected != "generic":
+                self.config.platform = detected
+                print(f"Auto-detected platform: {detected}")
+        
+        # Install PlatformIO if needed
+        if self.config.platform == "platformio":
+            if not self._install_platformio():
+                self._show_error("Failed to install PlatformIO. Please install manually:\npip install platformio")
+                return False
+        
+        # Get appropriate commands
+        build_cmd, flash_cmd = self._get_build_commands()
         
         # Build
-        self._show_info("Building firmware...")
-        result = subprocess.run(build_cmd, cwd=self.config.project_path, capture_output=True, text=True)
+        self._show_info(f"Building firmware with {self.config.platform}...")
+        print(f"Running: {' '.join(build_cmd)}")
+        result = subprocess.run(
+            build_cmd, 
+            cwd=self.config.project_path, 
+            capture_output=True, 
+            text=True
+        )
         if result.returncode != 0:
             self._show_error(f"Build failed:\n{result.stderr[-500:]}")
             return False
         
         # Flash
         self.state = SessionState.FLASHING
-        self._show_info("Flashing firmware...")
-        result = subprocess.run(flash_cmd, cwd=self.config.project_path, capture_output=True, text=True)
+        self._show_info(f"Flashing firmware to {self.config.port}...")
+        print(f"Running: {' '.join(flash_cmd)}")
+        result = subprocess.run(
+            flash_cmd, 
+            cwd=self.config.project_path, 
+            capture_output=True, 
+            text=True
+        )
         if result.returncode != 0:
             self._show_error(f"Flash failed:\n{result.stderr[-500:]}")
             return False
@@ -496,7 +695,7 @@ class InteractiveSession:
         return True
     
     def _restart_monitoring(self):
-        """Restart log monitoring."""
+        """Restart log monitoring - SOFTWARE ACTION."""
         self.state = SessionState.MONITORING
         self.start_monitoring()
     
@@ -522,12 +721,11 @@ class InteractiveSession:
     def _edit_configuration(self, match: LogMatch):
         """Open configuration for editing."""
         self._show_info("Please edit the configuration file and then click OK to retry.")
-        # Could open editor here if desired
         if self._ask_yes_no("Configuration updated. Retry?"):
             self._restart_monitoring()
     
     def _modify_stack_size(self):
-        """Modify task stack size."""
+        """Modify task stack size - SOFTWARE ACTION."""
         new_size = self._ask_number("New stack size (bytes):", 1024, 32768, 8192)
         if new_size:
             self._update_config_value("TASK_STACK_SIZE", str(new_size))
@@ -535,7 +733,7 @@ class InteractiveSession:
                 self._restart_monitoring()
     
     def _abort_session(self, reason: str):
-        """Abort the session."""
+        """Abort the session with error."""
         self.state = SessionState.ERROR
         self._log_event("session_aborted", {"reason": reason})
         self._show_error(f"Session aborted: {reason}")
@@ -544,7 +742,13 @@ class InteractiveSession:
         sys.exit(1)
     
     def start_monitoring(self):
-        """Start the log monitoring phase."""
+        """
+        Start the log monitoring phase.
+        
+        This runs continuously, watching for patterns in the logs.
+        When patterns are detected, it decides whether to prompt user
+        (physical action) or handle automatically (software action).
+        """
         self.state = SessionState.MONITORING
         self._log_event("monitoring_started", {"patterns": self.config.patterns})
         
@@ -571,17 +775,27 @@ class InteractiveSession:
         self.watcher.start()
     
     def run(self):
-        """Run the full interactive session."""
+        """
+        Run the full interactive session.
+        
+        Main entry point that coordinates:
+        1. Initial setup and info
+        2. Build and flash (software actions)
+        3. Start monitoring
+        4. Handle detected patterns
+        """
         self._show_info(
             f"Interactive Firmware Development Session\n"
             f"Session ID: {self.session_id}\n\n"
             f"Project: {self.config.project_path}\n"
+            f"Platform: {self.config.platform}\n"
             f"Target: {self.config.target}\n"
             f"Port: {self.config.port}\n\n"
-            f"The AI will monitor logs and prompt you when issues are detected."
+            f"The AI will handle all software actions automatically.\n"
+            f"You'll only be prompted for physical actions."
         )
         
-        # Initial build and flash
+        # Initial build and flash (SOFTWARE ACTION)
         if self._ask_yes_no("Build and flash firmware now?"):
             if not self._build_and_flash():
                 if not self._ask_yes_no("Build/flash failed. Continue with monitoring only?"):
@@ -592,8 +806,9 @@ class InteractiveSession:
 
 
 def main():
+    """Main entry point with argument parsing."""
     parser = argparse.ArgumentParser(
-        description="Interactive Firmware Development Session"
+        description="Interactive Firmware Development Session - AI handles software, prompts for physical actions only"
     )
     parser.add_argument(
         "--project", "-P",
@@ -618,9 +833,9 @@ def main():
     )
     parser.add_argument(
         "--platform",
-        choices=["esp-idf", "arduino", "generic"],
-        default="esp-idf",
-        help="Platform type (default: esp-idf)"
+        choices=["esp-idf", "arduino", "platformio", "generic"],
+        default="generic",
+        help="Platform type (default: auto-detect)"
     )
     parser.add_argument(
         "--patterns",

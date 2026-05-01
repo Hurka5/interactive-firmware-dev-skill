@@ -1,11 +1,17 @@
 ---
 name: interactive-firmware-dev
-description: AI-assisted interactive firmware development using Zenity dialogs for PHYSICAL user actions. The AI codes firmware, monitors logs, and prompts the user only for PHYSICAL actions it cannot perform itself (move NFC cards, rotate encoders, press buttons, connect/disconnect hardware). The AI handles all software actions (reset, flash, config changes) automatically without bothering the user.
+description: AI-assisted interactive firmware development using Zenity dialogs for PHYSICAL user actions. Supports ESP-IDF, Arduino, and PlatformIO. The AI codes firmware, monitors logs, and prompts the user only for PHYSICAL actions it cannot perform itself (move NFC cards, rotate encoders, press buttons, connect/disconnect hardware). The AI handles all software actions (reset, flash, config changes) automatically without bothering the user.
 ---
 
 # Interactive Firmware Development - Physical Actions
 
 AI-assisted firmware development with real-time log monitoring and Zenity-based prompts for **physical actions only**. The AI handles all software operations autonomously and only asks the user to perform physical actions it cannot do.
+
+## Supported Platforms
+
+- **ESP-IDF**: ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6
+- **Arduino**: ESP32, ESP8266, AVR, ARM
+- **PlatformIO**: Universal embedded development (recommended for most projects)
 
 ## Core Principle
 
@@ -29,6 +35,48 @@ AI-assisted firmware development with real-time log monitoring and Zenity-based 
 - Inserting/removing SD cards
 - Adjusting trim pots
 - Triggering sensors manually
+
+## PlatformIO Installation (For AI Agents)
+
+When working with PlatformIO projects, the AI must ensure PlatformIO is installed:
+
+### Check if PlatformIO is installed:
+```bash
+# Check for pio command
+which pio
+pio --version
+
+# Check for platformio python package
+pip list | grep platformio
+```
+
+### Install PlatformIO if missing:
+```bash
+# Method 1: Install via pip (recommended)
+pip install platformio
+
+# Method 2: Install via pipx (isolated environment)
+pipx install platformio
+
+# Method 3: Use PlatformIO Core installer
+curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py -o get-platformio.py
+python3 get-platformio.py
+```
+
+### Verify installation:
+```bash
+pio --version
+# Should output: PlatformIO Core, version 6.x.x
+
+# Test with a simple command
+pio boards esp32
+```
+
+### PlatformIO Project Structure Detection:
+The AI should detect PlatformIO projects by looking for:
+- `platformio.ini` file in project root
+- `.pio/` build directory
+- `src/` folder (PlatformIO default)
 
 ## Quick Start
 
