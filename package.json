@@ -1,0 +1,89 @@
+{
+  "name": "@hurka5/interactive-firmware-dev",
+  "version": "1.0.0",
+  "description": "AI-assisted interactive firmware development with Zenity prompts for physical actions only",
+  "main": "scripts/interactive_session.py",
+  "bin": {
+    "interactive-firmware-dev": "./scripts/interactive_session.py",
+    "ifd": "./scripts/interactive_session.py"
+  },
+  "scripts": {
+    "start": "./scripts/interactive_session.py",
+    "test": "echo 'Run: ./scripts/interactive_session.py --project ./your_project'",
+    "postinstall": "node install.js",
+    "skills-install": "node install.js"
+  },
+  "keywords": [
+    "firmware",
+    "embedded",
+    "esp32",
+    "arduino",
+    "platformio",
+    "interactive",
+    "zenity",
+    "hardware-testing",
+    "nfc",
+    "encoder",
+    "sensor",
+    "skill"
+  ],
+  "author": "Hurka5",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hurka5/interactive-firmware-dev-skill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Hurka5/interactive-firmware-dev-skill/issues"
+  },
+  "homepage": "https://github.com/Hurka5/interactive-firmware-dev-skill#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "linux"
+  ],
+  "preferGlobal": true,
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "scripts/",
+    "references/",
+    "examples/",
+    "skill.json",
+    "install.js",
+    "LICENSE"
+  ],
+  "skill": {
+    "name": "interactive-firmware-dev",
+    "type": "development",
+    "category": "embedded",
+    "entry": "SKILL.md",
+    "commands": [
+      {
+        "name": "interactive-session",
+        "script": "scripts/interactive_session.py",
+        "description": "Start interactive firmware development session"
+      },
+      {
+        "name": "log-watcher",
+        "script": "scripts/log_watcher.py",
+        "description": "Watch serial logs for patterns"
+      },
+      {
+        "name": "zenity-prompt",
+        "script": "scripts/zenity_prompt.sh",
+        "description": "Zenity dialog helper"
+      }
+    ],
+    "requirements": [
+      "zenity",
+      "python3"
+    ],
+    "platforms": [
+      "esp-idf",
+      "arduino",
+      "platformio"
+    ]
+  }
+}

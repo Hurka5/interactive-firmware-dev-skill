@@ -1,0 +1,36 @@
+{
+  "name": "interactive-firmware-dev",
+  "version": "1.0.0",
+  "description": "AI-assisted interactive firmware development with Zenity prompts for physical actions only",
+  "author": "Hurka5",
+  "repository": "https://github.com/Hurka5/interactive-firmware-dev-skill",
+  "license": "MIT",
+  "entry": "SKILL.md",
+  "type": "development",
+  "tags": [
+    "firmware",
+    "embedded",
+    "esp32",
+    "arduino",
+    "platformio",
+    "interactive",
+    "hardware-testing"
+  ],
+  "requirements": {
+    "commands": [
+      "zenity",
+      "python3"
+    ],
+    "platforms": ["linux"]
+  },
+  "scripts": {
+    "interactive-session": "scripts/interactive_session.py",
+    "log-watcher": "scripts/log_watcher.py",
+    "zenity-prompt": "scripts/zenity_prompt.sh"
+  },
+  "config": {
+    "auto_detect_platforms": true,
+    "physical_actions_only": true,
+    "supported_platforms": ["esp-idf", "arduino", "platformio"]
+  }
+}

@@ -2,6 +2,19 @@
 
 AI-assisted firmware development where you help by performing physical actions. The AI handles all the software work automatically and only asks for your help when it needs hands-on hardware interaction.
 
+## Quick Install
+
+```bash
+# Install using npx skills add
+npx skills add @hurka5/interactive-firmware-dev
+
+# Or install globally
+npm install -g @hurka5/interactive-firmware-dev
+
+# Or clone from GitHub
+git clone https://github.com/Hurka5/interactive-firmware-dev-skill.git
+```
+
 ## What You Can Do To Help
 
 During firmware development and testing, the AI will occasionally need your help with physical actions:
@@ -65,6 +78,17 @@ During firmware development and testing, the AI will occasionally need your help
 
 ### Install the Skill
 
+**Method 1: Using npx (recommended)**
+```bash
+npx skills add @hurka5/interactive-firmware-dev
+```
+
+**Method 2: Using npm**
+```bash
+npm install -g @hurka5/interactive-firmware-dev
+```
+
+**Method 3: Clone from GitHub**
 ```bash
 git clone https://github.com/Hurka5/interactive-firmware-dev-skill.git
 cd interactive-firmware-dev-skill
