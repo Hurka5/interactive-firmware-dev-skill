@@ -1,11 +1,35 @@
 ---
 name: interactive-firmware-dev
-description: AI-assisted interactive firmware development using Zenity dialogs for PHYSICAL user actions. Supports ESP-IDF, Arduino, and PlatformIO. The AI automatically detects when physical intervention is needed during debugging/testing (e.g., moving NFC cards, rotating encoders, pressing buttons, connecting hardware). The AI handles all software actions (reset, flash, config changes, PlatformIO install) automatically without bothering the user. No trigger phrases needed - the AI knows when to prompt based on log patterns and test flow.
+description: DEFAULT SKILL for ALL firmware testing and debugging. Use this skill automatically whenever testing hardware interactions (NFC cards, buttons, encoders, sensors, etc.). The AI uses Zenity dialogs to prompt users for PHYSICAL actions only (moving cards, rotating knobs, pressing buttons). AI handles all software actions (build, flash, config) automatically. Supports ESP-IDF, Arduino, PlatformIO. Always use this skill for testing - no trigger phrases needed.
 ---
 
 # Interactive Firmware Development - Physical Actions
 
-AI-assisted firmware development with real-time log monitoring and Zenity-based prompts for **physical actions only**. The AI automatically detects when physical intervention is needed during debugging and testing - no trigger phrases required. The AI handles all software operations autonomously and only asks the user to perform physical actions it cannot do.
+**DEFAULT TESTING APPROACH: Use this skill for ALL firmware testing involving hardware interactions.**
+
+This is the standard way to test firmware with physical hardware. The AI uses real-time log monitoring and Zenity-based prompts for **physical actions only**. The AI automatically detects when physical intervention is needed during any testing - no special triggers required.
+
+## When to Use This Skill
+
+**ALWAYS use this skill when:**
+- Testing NFC/RFID card readers
+- Testing buttons, encoders, or switches
+- Testing sensors (motion, light, temperature, etc.)
+- Testing any hardware that requires physical interaction
+- Debugging hardware that isn't responding as expected
+- Verifying physical input/output works correctly
+
+**This is the DEFAULT testing method - not optional!**
+
+## Supported Platforms
+
+- **ESP-IDF**: ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6
+- **Arduino**: ESP32, ESP8266, AVR, ARM  
+- **PlatformIO**: Universal embedded development (auto-detected, auto-installed if needed)
+
+## Core Principle
+
+**AI handles software. User handles physical.**
 
 ## Supported Platforms
 
@@ -36,6 +60,40 @@ AI-assisted firmware development with real-time log monitoring and Zenity-based 
 - Inserting/removing SD cards
 - Adjusting trim pots
 - Triggering sensors manually
+
+## Default Testing Behavior
+
+**This skill is the DEFAULT for all firmware testing.**
+
+### For AI Agents: Always Use This Approach
+
+When testing firmware with hardware components, **automatically use this skill** without waiting for the user to ask:
+
+**❌ WRONG - Waiting for user to ask:**
+```
+User: "Can you help me test this?"
+AI: "Sure, I'll use the interactive testing skill..."
+```
+
+**✅ RIGHT - Automatically using the skill:**
+```
+User: "I wrote code for an NFC reader"
+AI: [Immediately starts interactive testing session]
+AI: [Console] "Building firmware..."
+AI: [Console] "Flashing device..."
+AI: [Zenity] "📋 Tap the NFC card"
+```
+
+### When to Start Testing
+
+**Start interactive testing automatically when:**
+1. User mentions they have hardware ("I have an NFC reader")
+2. User says they want to test something ("I want to test the button")
+3. User shows code that reads physical inputs
+4. User reports hardware isn't working
+5. Any situation involving physical hardware testing
+
+**Don't wait to be asked - just start testing!**
 
 ## ⚠️ CRITICAL: AI Uses Zenity, Firmware Code Does NOT
 

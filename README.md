@@ -1,6 +1,8 @@
 # Interactive Firmware Development Skill
 
-AI-assisted firmware development where you help by performing physical actions. The AI handles all the software work automatically and only asks for your help when it needs hands-on hardware interaction.
+**DEFAULT TESTING APPROACH for ALL firmware with hardware interactions.**
+
+AI-assisted firmware development where you help by performing physical actions. The AI automatically uses this approach for any testing involving hardware - no need to ask specially.
 
 ## How It Works
 
@@ -128,22 +130,28 @@ chmod +x scripts/*.py scripts/*.sh
 
 ## Quick Start
 
+**The AI automatically uses this approach whenever you mention hardware testing.**
+
+Just say something like:
+- "I have an NFC reader I want to test"
+- "My button isn't working"
+- "Help me test this encoder"
+
+The AI will immediately start the interactive testing session.
+
 ```bash
-# Start a session - AI will prompt you when it needs physical help
+# Or start manually
 ./scripts/interactive_session.py --project ./my_project --port /dev/ttyUSB0
 ```
 
-**What happens:**
-1. AI builds and flashes the firmware automatically
-2. AI starts monitoring the device logs
-3. When the AI needs physical help, a popup appears explaining:
-   - **What is being tested** (e.g., "Testing card detection")
-   - **What action to take** (e.g., "Tap the white card")
-   - **What to expect** (e.g., "Blue LED should light up")
-   - **Why this matters** (e.g., "Verifies antenna coupling")
-4. You perform the action and click OK
-5. If something goes wrong, AI asks what happened and adapts the test
-6. AI continues with the next test, explaining the purpose each time
+**What happens automatically:**
+1. AI detects you have hardware to test → starts interactive session
+2. AI builds and flashes the firmware
+3. AI monitors device logs in real-time
+4. When physical action needed, popup appears with clear instructions
+5. You perform the action and click OK
+6. AI verifies via logs and continues testing
+7. If something unexpected happens, AI asks what occurred and adapts
 
 ## Example Session: Context-Aware Testing
 
