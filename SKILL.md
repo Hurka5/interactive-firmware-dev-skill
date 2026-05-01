@@ -1,11 +1,11 @@
 ---
 name: interactive-firmware-dev
-description: AI-assisted interactive firmware development using Zenity dialogs for PHYSICAL user actions. Supports ESP-IDF, Arduino, and PlatformIO. The AI codes firmware, monitors logs, and prompts the user only for PHYSICAL actions it cannot perform itself (move NFC cards, rotate encoders, press buttons, connect/disconnect hardware). The AI handles all software actions (reset, flash, config changes, PlatformIO install) automatically without bothering the user.
+description: AI-assisted interactive firmware development using Zenity dialogs for PHYSICAL user actions. Supports ESP-IDF, Arduino, and PlatformIO. The AI automatically detects when physical intervention is needed during debugging/testing (e.g., moving NFC cards, rotating encoders, pressing buttons, connecting hardware). The AI handles all software actions (reset, flash, config changes, PlatformIO install) automatically without bothering the user. No trigger phrases needed - the AI knows when to prompt based on log patterns and test flow.
 ---
 
 # Interactive Firmware Development - Physical Actions
 
-AI-assisted firmware development with real-time log monitoring and Zenity-based prompts for **physical actions only**. The AI handles all software operations autonomously and only asks the user to perform physical actions it cannot do.
+AI-assisted firmware development with real-time log monitoring and Zenity-based prompts for **physical actions only**. The AI automatically detects when physical intervention is needed during debugging and testing - no trigger phrases required. The AI handles all software operations autonomously and only asks the user to perform physical actions it cannot do.
 
 ## Supported Platforms
 
@@ -404,11 +404,3 @@ zenity --question \
 - **references/decision-matrix.md** - When to prompt vs auto-handle
 - **examples/nfc-testing-session.md** - Complete NFC test walkthrough
 - **examples/encoder-testing-session.md** - Complete encoder test walkthrough
-
-## Trigger Examples
-
-- "Help me test this NFC reader - prompt me when to tap cards"
-- "Interactive testing for my rotary encoder project"
-- "Develop firmware with physical interaction prompts"
-- "Test my sensor project with step-by-step physical actions"
-- "AI coding with human-in-the-loop for hardware testing"

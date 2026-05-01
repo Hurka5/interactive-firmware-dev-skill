@@ -1,6 +1,6 @@
 # Interactive Firmware Development Skill
 
-AI-assisted firmware development with Zenity prompts for **physical actions only**. The AI handles all software operations automatically and only asks the user to perform physical actions it cannot do itself.
+AI-assisted firmware development with Zenity prompts for **physical actions only**. The AI automatically detects when physical intervention is needed during debugging and testing - no trigger phrases required. The AI handles all software operations automatically and only asks the user to perform physical actions it cannot do itself.
 
 ## Core Principle
 
@@ -263,15 +263,16 @@ AI: Log: "Card removed. Waiting..."
 ./scripts/zenity_prompt.sh --question "Continue testing?"
 ```
 
-## Trigger Phrases
+## How It Works
 
-Use this skill when you say:
-- "Help me test this NFC reader - tell me when to tap cards"
-- "Interactive testing for my rotary encoder project"
-- "Develop firmware with prompts for physical actions"
-- "Test my sensor project with step-by-step hardware interaction"
-- "AI coding with human-in-the-loop for hardware testing"
-- "Prompt me to move cards/rotate knobs/press buttons"
+The AI automatically detects when physical intervention is needed by:
+
+1. **Monitoring logs** for specific patterns (card detection, sensor triggers, errors)
+2. **Tracking test flow** (knowing when to ask for card tap vs card removal)
+3. **Detecting hardware states** (when software reset fails, prompting for power cycle)
+4. **Recognizing test checkpoints** (when user verification is needed)
+
+No trigger phrases required - the AI knows when to prompt based on the current debugging/testing context.
 
 ## License
 
