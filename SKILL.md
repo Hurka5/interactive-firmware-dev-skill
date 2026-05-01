@@ -82,6 +82,71 @@ void loop() {
 
 **The firmware code never prompts the user - only the AI does via Zenity!**
 
+## ⚠️ CRITICAL: AI Must Use Zenity for ALL User Interaction
+
+### The Rule
+**The AI must use Zenity for ALL user interaction. NEVER use Python input() or CLI prompts.**
+
+### ❌ WRONG - AI writing Python scripts with input()
+```python
+# DON'T WRITE THIS - Using Python input()
+user_response = input("Press Enter when ready...")  # ❌ NEVER DO THIS
+
+# DON'T WRITE THIS - Using getpass
+import getpass
+password = getpass.getpass("Enter password: ")  # ❌ NEVER DO THIS
+
+# DON'T WRITE THIS - Using CLI prompts
+print("Did you tap the card? (y/n): ")
+response = sys.stdin.readline().strip()  # ❌ NEVER DO THIS
+```
+
+**WHY IT'S WRONG:**
+- Python `input()` blocks and waits for terminal input
+- User might not see the terminal prompt
+- Zenity provides clear GUI popups that grab attention
+- Terminal input is error-prone and user-unfriendly
+
+### ✅ RIGHT - AI using Zenity for all interaction
+```python
+# CORRECT: Using Zenity via the helper script
+import subprocess
+
+# Show info dialog
+subprocess.run(["./scripts/zenity_prompt.sh", "--info", 
+                "Please tap the NFC card on the reader"])
+
+# Ask yes/no question
+result = subprocess.run(["./scripts/zenity_prompt.sh", "--question", 
+                        "Did the LED light up?"], capture_output=True)
+if result.returncode == 0:
+    print("User said yes")
+
+# Get text input
+result = subprocess.run(["./scripts/zenity_prompt.sh", "--entry", 
+                        "Enter WiFi SSID:", "MyNetwork"], 
+                       capture_output=True, text=True)
+ssid = result.stdout.strip()
+```
+
+### Summary Table
+
+| Interaction Type | WRONG (Don't Use) | RIGHT (Use This) |
+|-----------------|-------------------|------------------|
+| Ask user to do something | `input("Press Enter...")` | `zenity --info` |
+| Ask yes/no question | `input("Continue? (y/n): ")` | `zenity --question` |
+| Get text input | `input("Enter name: ")` | `zenity --entry` |
+| Select from options | `input("Choose 1-3: ")` | `zenity --list` |
+| Get number input | `int(input("Enter value: "))` | `zenity --scale` |
+| Show error | `print("Error!")` | `zenity --error` |
+
+### The Golden Rule
+**If the AI needs to interact with the user, it MUST use Zenity. No exceptions.**
+
+- Firmware code: Only reads hardware, prints logs
+- AI Python scripts: Use Zenity for ALL user interaction
+- NEVER use: `input()`, `getpass`, `sys.stdin`, or any CLI prompts
+
 ## Quick Start
 
 ```bash

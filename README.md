@@ -31,6 +31,8 @@ AI-assisted firmware development where you help by performing physical actions. 
 
 The firmware code never prompts you - only the AI does via popup dialogs!
 
+**Important:** The AI always uses **Zenity popup dialogs** (GUI windows) to ask for your input. The AI never uses terminal input or asks you to type responses in the console.
+
 ## Quick Install
 
 ```bash
