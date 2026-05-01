@@ -282,6 +282,114 @@ subprocess.run(["./scripts/zenity_prompt.sh", "--info",
 ✅ RIGHT: "Wave your hand in front of the PIR sensor"
 ```
 
+## Prompt Philosophy: Trust but Verify
+
+### Assume User Did the Action
+**If the user clicked OK, assume they performed the action.** Don't ask "Did you do it?" - that's redundant.
+
+**❌ WRONG - Don't ask if they did it:**
+```
+"Please tap the NFC card"
+[User clicks OK]
+"Did you actually tap the card?"  // ❌ DON'T ASK THIS
+```
+
+**✅ RIGHT - Assume they did it, check logs:**
+```
+"Please tap the NFC card"
+[User clicks OK]
+[AI checks logs for "Card detected"]
+"Card detected! UID: 0xA1B2C3D4"  // ✓ Verify via logs
+```
+
+### Verify via Logs, Not Questions
+The primary way to verify is by monitoring device logs, not by asking the user.
+
+**❌ WRONG - Asking user to confirm:**
+```
+"Did the LED light up? (yes/no)"  // ❌ DON'T ASK - check logs instead
+```
+
+**✅ RIGHT - Check logs:**
+```
+[AI sees in logs: "Card detected"]
+"Card detected successfully!"  // ✓ Verified via logs
+```
+
+### When to Question the User
+Only ask follow-up questions if logs are ambiguous or unexpected:
+
+**Scenario: Expected card detection but logs show nothing**
+```
+⚠️  No card detected in logs after prompt.
+
+Possible reasons:
+- Card not positioned correctly
+- Wrong card type
+- Reader not powered
+
+❓ Which happened?
+[ ] I tapped the card but no LED lit up
+[ ] I couldn't tap the card yet (need more time)
+[ ] The LED lit up but logs don't show detection
+[ ] Something else
+```
+
+**Scenario: Unexpected behavior**
+```
+⚠️  Unexpected: Got "Card removed" instead of "Card detected"
+
+❓ What happened?
+[ ] I removed a card that was already there
+[ ] I never tapped a card
+[ ] Something else
+```
+
+### Keep Prompts Concise
+Only say what matters. Remove fluff.
+
+**❌ WRONG - Too verbose:**
+```
+🔧 TEST: NFC Card Detection
+
+Testing if the PN532 reader can detect MIFARE Classic cards.
+
+📋 What to do: Tap the WHITE card on the reader
+⏱️  Timing: Hold for 2 seconds
+
+✓ Expected: Blue LED lights up + log shows "Card detected"
+
+This verifies the I2C communication and antenna are working.
+```
+
+**✅ RIGHT - Concise:**
+```
+🔧 TEST: Card Detection
+
+📋 Tap the WHITE card on the reader
+⏱️  Hold 2 seconds until LED lights up
+```
+
+**Even more concise (when context is clear):**
+```
+📋 Tap the white card
+```
+
+### When to Add Context
+Add context only when it matters to the test:
+
+**Needs context:**
+```
+📋 Wait until music plays, then click OK
+
+⏱️  The device will play a test tone in 3-5 seconds
+```
+
+**Doesn't need context:**
+```
+📋 Tap the card  // User knows what to do from previous tests
+```
+
 ## Physical Action Prompt Design
 
 ### Template Structure
@@ -497,48 +605,54 @@ I detected a button press, but I was waiting for an encoder rotation.
 This helps me adapt the test to your actual hardware.
 ```
 
-### Direct Test Examples
+### Direct Test Examples (Concise)
 
-**Button Test (Direct)**
+**Button Test**
 ```
-🔧 TEST: Button Input
+🔧 TEST: Button Press
 
-Testing GPIO button debouncing and detection.
+📋 Press the USER button once
+⏱️  Quick click
 
-📋 Action: Press the USER button once
-⏱️  Quick press and release (like a click)
-
-✓ Expected: Log shows "Button pressed" and "Button released"
-
-This verifies the interrupt and debounce logic.
+[User clicks OK]
+[AI sees in logs: "Button pressed!"]
+✓ Button working
 ```
 
-**Encoder Test (Direct with Context)**
+**Encoder Test**
 ```
-🔧 TEST: Encoder Clockwise Rotation
+🔧 TEST: Encoder Rotation
 
-Testing encoder direction detection.
+📋 Rotate the knob CLOCKWISE 3 clicks
+🔄 → → →
 
-📋 Action: Rotate the knob CLOCKWISE 3 clicks
-🔄 Direction: → (right/forward)
-
-✓ Expected: Logs show position increasing (e.g., 50 → 51 → 52 → 53)
-
-This verifies the CLK/DT pin decoding.
+[User clicks OK]
+[AI sees in logs: Position 50 → 51 → 52 → 53]
+✓ Clockwise rotation detected
 ```
 
-**NFC Communication Test (Context-Rich)**
+**NFC Test with Timing Context**
 ```
-🔧 TEST: NFC Read/Write Communication
+🔧 TEST: NFC Read/Write
 
-Testing if I can read and write data to the MIFARE card.
+📋 Tap and HOLD the card
+⏱️  Keep holding while I write and read...
 
-📋 Step 1: Tap and HOLD the card
-💾 I'm writing test data to block 4...
-✓ Write successful
+[User holds card, clicks OK]
+[AI sees in logs: "Write OK", "Read OK", "Data matches"]
+✓ Read/write working
+```
 
-📋 Step 2: Keep holding - now reading back...
-✓ Read successful - data matches!
+**Music/Sound Test (Needs Context)**
+```
+🔧 TEST: Audio Output
+
+📋 Wait until you hear the beep, then click OK
+⏱️  Sound will play in 2-3 seconds
+
+[Sound plays, user clicks OK]
+✓ Audio output working
+```
 
 📋 Step 3: You can remove the card
 
@@ -547,82 +661,59 @@ This verifies the full read/write communication chain.
 
 ## Workflow Integration
 
-### Typical NFC Testing Session (Context-Aware)
+### Typical NFC Testing Session (Concise)
 
 ```
 [Console] AI: Building firmware...
 [Console] AI: Flashing to ESP32...
 [Console] AI: Starting serial monitor...
-[Console] AI: Monitoring logs... (logs appear below)
+[Console] AI: Monitoring logs...
 
 [Zenity Popup] 🔧 TEST: Baseline - No Card Present
 
-Establishing baseline: Verifying reader detects NO card when none present.
+📋 Ensure no NFC cards are near the reader
 
-📋 Action: Ensure no NFC cards are near the reader (10cm away)
-✓ Expected: Logs show "Waiting for card..." continuously
+User: [Clicks OK]
 
-This confirms the reader isn't stuck detecting a phantom card.
-
-User: [Ensures no cards, clicks OK]
-
-AI: Log: "NFC reader initialized. Waiting for card..."
-AI: Log: "No card detected (baseline established)"
+[Console] AI: Log: "NFC reader initialized. Waiting for card..."
+[Console] AI: Log: "No card detected"
 
 ---
 
-[Zenity] 🔧 TEST: Card Detection - White Card (MIFARE Classic)
+[Zenity Popup] 🔧 TEST: Card Detection
 
-Testing if the reader detects MIFARE Classic cards and reads the UID.
+📋 Tap the WHITE card on the reader
+⏱️  Hold 2 seconds until LED lights up
 
-📋 Action: Tap the WHITE card on the reader
-⏱️  Hold for 2 seconds while I verify detection
+User: [Taps card, clicks OK]
 
-✓ Expected: 
-  - Blue LED lights up
-  - Log shows: "Card detected! UID: 0x..."
-  - Log shows: "Type: MIFARE Classic"
-
-This verifies antenna coupling and basic communication.
-
-User: [Taps white card, sees LED, clicks OK]
-
-AI: Log: "Card detected! UID: 0xA1B2C3D4"
-AI: Log: "Type: MIFARE Classic 1K"
-AI: Log: "Authentication successful"
-AI: Log: "Read 16 bytes from block 4"
+[Console] AI: Log: "Card detected! UID: 0xA1B2C3D4"
+[Console] AI: Log: "Type: MIFARE Classic 1K"
+[Console] AI: ✓ Card detected successfully
 
 ---
 
-[Zenity] 🔧 TEST: Card Removal Detection
+[Zenity Popup] 🔧 TEST: Card Removal
 
-Testing if the reader detects when the card is removed.
+📋 Remove the white card
 
-📋 Action: REMOVE the white card completely
-⏱️  Lift card 10cm away from reader
+User: [Removes card, clicks OK]
 
-✓ Expected: Blue LED turns off + log shows "Card removed"
-
-This verifies the presence detection loop is working.
-
-User: [Removes card, sees LED off, clicks OK]
-
-AI: Log: "Card removed"
-AI: Log: "Waiting for next card..."
+[Console] AI: Log: "Card removed"
+[Console] AI: ✓ Removal detected
 
 ---
 
-[Zenity] 🔧 TEST: Card Detection - Blue Card (NTAG213)
+[Zenity Popup] 🔧 TEST: Different Card Type
 
-Testing a different card type (NTAG213) to verify protocol handling.
+📋 Tap the BLUE card
 
-📋 Action: Tap the BLUE card on the reader
-⏱️  Hold for 2 seconds
+User: [Taps card, clicks OK]
 
-✓ Expected: 
-  - Blue LED lights up
-  - Log shows: "Type: NTAG213"
-  - Log shows NDEF message content
+[Console] AI: Log: "Card detected! UID: 0xE5F6A7B8"
+[Console] AI: Log: "Type: NTAG213"
+[Console] AI: Log: "NDEF: https://example.com"
+[Console] AI: ✓ All tests passed
 
 This verifies the reader handles different NFC types correctly.
 
@@ -653,78 +744,49 @@ The NFC reader is working correctly!
 [Console] AI: Starting monitor...
 [Console] AI: Monitoring logs...
 
-[Zenity Popup] 🔧 TEST: Encoder Center Position
+[Zenity Popup] 🔧 TEST: Encoder Center
 
-Calibrating encoder - finding the middle position for reference.
-
-📋 Action: Rotate encoder to find the center detent
-🎯 Target: Middle of rotation range (will be set as position 50)
-
-✓ Expected: You feel a tactile "click" or resistance at center
-
-This establishes a known starting point for directional tests.
+📋 Rotate encoder to center position
 
 User: [Rotates to center, clicks OK]
 
-AI: Log: "Encoder position: 50 (center)"
-AI: Log: "Center position calibrated"
+[Console] AI: Log: "Encoder position: 50 (center)"
 
 ---
 
-[Zenity] 🔧 TEST: Clockwise Rotation Detection
+[Zenity Popup] 🔧 TEST: Clockwise Rotation
 
-Testing if clockwise rotation increases the position value.
+📋 Rotate CLOCKWISE 5 clicks
+🔄 → → → → →
 
-📋 Action: Rotate encoder CLOCKWISE exactly 5 clicks
-🔄 Direction: → (right/forward)
-📊 Current: 50 → Expected: 55
+User: [Rotates 5 clicks, clicks OK]
 
-✓ Expected: Logs show position increasing by 1 each click:
-  "Encoder: +1 (position: 51)"
-  "Encoder: +1 (position: 52)"
-  ...through 55
-
-This verifies the CLK/DT pin decoding for clockwise direction.
-
-User: [Rotates 5 clicks CW, clicks OK]
-
-AI: Log: "Encoder: +1 (position: 51)"
-AI: Log: "Encoder: +1 (position: 52)"
-AI: Log: "Encoder: +1 (position: 53)"
-AI: Log: "Encoder: +1 (position: 54)"
-AI: Log: "Encoder: +1 (position: 55)"
+[Console] AI: Log: "Encoder: +1 (position: 51)"
+[Console] AI: Log: "Encoder: +1 (position: 52)"
+[Console] AI: Log: "Encoder: +1 (position: 53)"
+[Console] AI: Log: "Encoder: +1 (position: 54)"
+[Console] AI: Log: "Encoder: +1 (position: 55)"
+[Console] AI: ✓ Clockwise detected
 
 ---
 
-[Zenity] 🔧 TEST: Counter-Clockwise Rotation Detection
+[Zenity Popup] 🔧 TEST: Counter-Clockwise
 
-Testing if counter-clockwise rotation decreases the position value.
+📋 Rotate COUNTER-CLOCKWISE 3 clicks
+🔄 ← ← ←
 
-📋 Action: Rotate encoder COUNTER-CLOCKWISE exactly 3 clicks
-🔄 Direction: ← (left/backward)
-📊 Current: 55 → Expected: 52
+User: [Rotates 3 clicks, clicks OK]
 
-✓ Expected: Logs show position decreasing by 1 each click:
-  "Encoder: -1 (position: 54)"
-  "Encoder: -1 (position: 53)"
-  "Encoder: -1 (position: 52)"
-
-This verifies direction detection is working both ways.
-
-User: [Rotates 3 clicks CCW, clicks OK]
-
-AI: Log: "Encoder: -1 (position: 54)"
-AI: Log: "Encoder: -1 (position: 53)"
-AI: Log: "Encoder: -1 (position: 52)"
+[Console] AI: Log: "Encoder: -1 (position: 54)"
+[Console] AI: Log: "Encoder: -1 (position: 53)"
+[Console] AI: Log: "Encoder: -1 (position: 52)"
+[Console] AI: ✓ Counter-clockwise detected
 
 ---
 
-[Zenity] 🔧 TEST: Encoder Button Press
+[Zenity Popup] 🔧 TEST: Button Press
 
-Testing the integrated push-button on the encoder shaft.
-
-📋 Action: Press the encoder button (push the shaft down)
-⏱️  Quick press and release (like a mouse click)
+📋 Press the encoder button
 
 ✓ Expected: Log shows "Button pressed!" and "Button released"
 

@@ -149,113 +149,77 @@ chmod +x scripts/*.py scripts/*.sh
 
 The AI explains what it's testing and why, so you understand the purpose of each action.
 
-### NFC Card Testing with Context
+### NFC Card Testing (Concise)
 
 ```
 [Console] AI: Building firmware...
 [Console] AI: Flashing to device...
 [Console] AI: Starting monitor...
-[Console] AI: Monitoring logs... (logs appear here in real-time)
+[Console] AI: Monitoring logs...
 
-[Popup] 🔧 TEST: Baseline - No Card Present
+[Popup] 🔧 TEST: Baseline
 
-Establishing baseline: Verifying reader detects NO card when none present.
+📋 Ensure no NFC cards are near the reader
 
-📋 Action: Ensure no NFC cards are near the reader (10cm away)
-✓ Expected: Logs show "Waiting for card..." continuously
+You: [Click OK]
 
-This confirms the reader isn't stuck detecting a phantom card.
-
-You: [Make sure no cards are present, click OK]
-
-AI: Log: "NFC reader initialized. Waiting for card..."
+[Console] AI: Log: "NFC reader initialized. Waiting for card..."
 
 ---
 
-[Popup] 🔧 TEST: Card Detection - White Card (MIFARE Classic)
+[Popup] 🔧 TEST: Card Detection
 
-Testing if the reader detects MIFARE Classic cards and reads the UID.
+📋 Tap the WHITE card
+⏱️  Hold 2 seconds until LED lights up
 
-📋 Action: Tap the WHITE card on the reader
-⏱️  Hold for 2 seconds while I verify detection
+You: [Tap card, click OK]
 
-✓ Expected: Blue LED lights up + log shows "Card detected! UID: 0x..."
-
-This verifies antenna coupling and basic communication.
-
-You: [Tap the white card, see LED light up, click OK]
-
-AI: Log: "Card detected! UID: 0xA1B2C3D4"
-AI: Log: "Type: MIFARE Classic 1K"
-AI: Log: "Authentication successful"
+[Console] AI: Log: "Card detected! UID: 0xA1B2C3D4"
+[Console] AI: ✓ Card detected
 
 ---
 
-[Popup] 🔧 TEST: Card Removal Detection
+[Popup] 🔧 TEST: Card Removal
 
-Testing if the reader detects when the card is removed.
+📋 Remove the white card
 
-📋 Action: REMOVE the white card completely
-⏱️  Lift card 10cm away from reader
+You: [Remove card, click OK]
 
-✓ Expected: Blue LED turns off + log shows "Card removed"
-
-This verifies the presence detection loop is working.
-
-You: [Remove the card, see LED turn off, click OK]
-
-AI: Log: "Card removed"
+[Console] AI: Log: "Card removed"
+[Console] AI: ✓ Removal detected
 ```
 
 ### Error Recovery: When Things Go Wrong
 
-If something unexpected happens, the AI asks what occurred so it can adapt:
+If something unexpected happens, the AI asks what occurred:
 
 ```
-[Popup] 🔧 TEST: Button Press Detection
+[Popup] 🔧 TEST: Button Press
 
-Testing GPIO interrupt and debouncing for the USER button.
+📋 Press the USER button
 
-📋 Action: Press the USER button once
-⏱️  Quick press and release
+You: [Accidentally press RESET instead]
 
-✓ Expected: Log shows "Button pressed!" then "Button released"
-
-You: [Accidentally press RESET instead of USER button]
-
-AI: Log: "ets Jun  8 2016 00:22:57"
-AI: Log: "rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)"
-AI: Log: "Rebooting..."
+[Console] AI: Log: "Rebooting..."
 
 ⚠️  DEVICE RESET DETECTED
 
-The device rebooted unexpectedly during the button test.
+❓ Did you press RESET by mistake?
+[ ] Yes, meant to press USER
+[ ] No, device crashed on its own
 
-❓ Did you:
-[ ] Press the RESET button by mistake (meant to press USER)
-[ ] Press RESET intentionally to restart the test
-[ ] The device crashed on its own
-[ ] Something else happened
+You: [Select "Yes, meant to press USER"]
 
-This helps me distinguish between intentional actions and crashes.
+[Console] AI: Re-flashing firmware...
 
-You: [Select "Pressed RESET by mistake"]
+[Popup] 🔧 TEST: Button Press (Retry)
 
-AI: Understood! You pressed RESET instead of USER. Let me restart the test.
-AI: Re-flashing firmware... ✓
-
-[Popup] 🔧 TEST: Button Press Detection (Retry)
-
-Let's try again. The USER button is the small black button next to RESET.
-
-📋 Action: Press the USER button (not RESET!)
+📋 Press the USER button (small black button, not RESET!)
 
 You: [Press correct button, click OK]
 
-AI: Log: "Button pressed!"
-AI: Log: "Button released"
-
-[Popup] ✓ TEST PASSED
+[Console] AI: Log: "Button pressed!"
+[Console] AI: ✓ Test passed
 ```
 
 ## What the AI Handles (You Don't Need To Worry About)
