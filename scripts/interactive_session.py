@@ -15,6 +15,7 @@ Physical actions (user handles):
 
 Software actions (AI handles automatically):
 - Building, flashing, resetting, config changes
+- All status messages go to console (not zenity)
 """
 
 import subprocess
@@ -77,6 +78,9 @@ class InteractiveSession:
     
     Key principle: AI handles all software actions automatically.
     Only prompts user for physical actions it cannot perform.
+    
+    Software status messages go to console (print).
+    Only physical actions use Zenity dialogs.
     """
     
     def __init__(self, config: SessionConfig):
@@ -126,6 +130,7 @@ class InteractiveSession:
     def _zenity(self, dialog_type: str, *args, timeout: Optional[int] = None) -> Tuple[int, str]:
         """
         Execute a zenity dialog and return result.
+        Only used for PHYSICAL actions that require user interaction.
         
         Args:
             dialog_type: Type of dialog (info, error, question, entry, list, scale)
@@ -154,13 +159,12 @@ class InteractiveSession:
             print(f"Zenity error: {e}", file=sys.stderr)
             return (1, "")
     
-    def _show_info(self, message: str):
-        """Show an information dialog to the user."""
+    def _prompt_physical_action(self, message: str):
+        """
+        Prompt user for a PHYSICAL action using Zenity.
+        This is the ONLY case where we use Zenity dialogs.
+        """
         self._zenity("info", message)
-    
-    def _show_error(self, message: str):
-        """Show an error dialog to the user."""
-        self._zenity("error", message)
     
     def _ask_yes_no(self, question: str, timeout: Optional[int] = None) -> bool:
         """Ask user a yes/no question. Returns True if yes/OK."""
@@ -248,11 +252,11 @@ class InteractiveSession:
         elif choice == "Check hardware connections":
             self._log_event("user_decision", {"pattern": match.pattern}, "check_hardware")
             # PHYSICAL ACTION: User checks hardware
-            self._show_info("Please check:\n- Power supply\n- USB cable\n- Boot/reset connections\n- Peripheral wiring")
+            self._prompt_physical_action("Please check:\n- Power supply\n- USB cable\n- Boot/reset connections\n- Peripheral wiring")
             if self._ask_yes_no("Hardware checked. Retry?"):
                 self._restart_monitoring()
         elif choice == "View full log context":
-            self._show_info(f"Full context:\n{chr(10).join(match.context)}")
+            print(f"Full context:\n{chr(10).join(match.context)}")
             self._handle_fatal_error(match, "")  # Re-prompt
         else:
             self._abort_session("User aborted after fatal error")
@@ -338,7 +342,7 @@ class InteractiveSession:
         self.fix_attempts += 1
         
         if self.fix_attempts > self.max_fix_attempts:
-            self._show_error(f"Maximum fix attempts ({self.max_fix_attempts}) reached. Please review manually.")
+            print(f"ERROR: Maximum fix attempts ({self.max_fix_attempts}) reached. Please review manually.", file=sys.stderr)
             self._abort_session("Too many fix attempts")
             return
         
@@ -357,20 +361,20 @@ class InteractiveSession:
             fix_applied = self._fix_watchdog_issue(match)
         else:
             # No automatic fix available
-            self._show_info(f"No automatic fix available for {match.pattern}. Please fix manually and retry.")
+            print(f"No automatic fix available for {match.pattern}. Please fix manually and retry.", file=sys.stderr)
             if self._ask_yes_no("Retry monitoring?"):
                 self._restart_monitoring()
             return
         
         if fix_applied:
             self._log_event("fix_applied", {"pattern": match.pattern, "attempt": self.fix_attempts})
-            self._show_info("Fix applied. Rebuilding and reflashing...")
+            print("Fix applied. Rebuilding and reflashing...")
             if self._build_and_flash():
                 self._restart_monitoring()
             else:
-                self._show_error("Build/flash failed. Please check manually.")
+                print("ERROR: Build/flash failed. Please check manually.", file=sys.stderr)
         else:
-            self._show_info("Fix not applied. Continuing monitoring...")
+            print("Fix not applied. Continuing monitoring...")
             self.state = SessionState.MONITORING
     
     def _fix_wifi_issue(self, match: LogMatch) -> bool:
@@ -428,7 +432,7 @@ class InteractiveSession:
                 return True
         elif choice == "Check wiring diagram":
             # PHYSICAL ACTION: User checks hardware
-            self._show_info("Please check:\n- SDA/SCL connections\n- Pull-up resistors (4.7kΩ)\n- Power supply to sensor")
+            self._prompt_physical_action("Please check:\n- SDA/SCL connections\n- Pull-up resistors (4.7kΩ)\n- Power supply to sensor")
             return self._ask_yes_no("Wiring checked. Retry?")
         
         return False
@@ -444,7 +448,7 @@ class InteractiveSession:
         
         if choice == "Check sensor power/wiring":
             # PHYSICAL ACTION: User checks hardware
-            self._show_info("Please check:\n- VCC and GND connections\n- Sensor power LED\n- Cable connections")
+            self._prompt_physical_action("Please check:\n- VCC and GND connections\n- Sensor power LED\n- Cable connections")
             return self._ask_yes_no("Hardware checked. Retry?")
         elif choice == "Try alternate I2C address":
             return self._fix_i2c_issue(match)
@@ -495,7 +499,7 @@ class InteractiveSession:
                 self._update_config_value("WATCHDOG_TIMEOUT", str(timeout))
                 return True
         elif choice == "Add yield() calls in loops":
-            self._show_info("Please add vTaskDelay(1) or yield() calls in long-running loops")
+            print("Please add vTaskDelay(1) or yield() calls in long-running loops")
             return self._ask_yes_no("Code updated. Continue?")
         
         return False
@@ -576,7 +580,7 @@ class InteractiveSession:
             return True
         
         # Try to install PlatformIO
-        self._show_info("PlatformIO not found. Installing...")
+        print("PlatformIO not found. Installing...")
         
         install_methods = [
             ["pip", "install", "platformio"],
@@ -658,14 +662,14 @@ class InteractiveSession:
         # Install PlatformIO if needed
         if self.config.platform == "platformio":
             if not self._install_platformio():
-                self._show_error("Failed to install PlatformIO. Please install manually:\npip install platformio")
+                print("ERROR: Failed to install PlatformIO. Please install manually:\npip install platformio", file=sys.stderr)
                 return False
         
         # Get appropriate commands
         build_cmd, flash_cmd = self._get_build_commands()
         
         # Build
-        self._show_info(f"Building firmware with {self.config.platform}...")
+        print(f"Building firmware with {self.config.platform}...")
         print(f"Running: {' '.join(build_cmd)}")
         result = subprocess.run(
             build_cmd, 
@@ -674,12 +678,12 @@ class InteractiveSession:
             text=True
         )
         if result.returncode != 0:
-            self._show_error(f"Build failed:\n{result.stderr[-500:]}")
+            print(f"ERROR: Build failed:\n{result.stderr[-500:]}", file=sys.stderr)
             return False
         
         # Flash
         self.state = SessionState.FLASHING
-        self._show_info(f"Flashing firmware to {self.config.port}...")
+        print(f"Flashing firmware to {self.config.port}...")
         print(f"Running: {' '.join(flash_cmd)}")
         result = subprocess.run(
             flash_cmd, 
@@ -688,10 +692,10 @@ class InteractiveSession:
             text=True
         )
         if result.returncode != 0:
-            self._show_error(f"Flash failed:\n{result.stderr[-500:]}")
+            print(f"ERROR: Flash failed:\n{result.stderr[-500:]}", file=sys.stderr)
             return False
         
-        self._show_info("Build and flash successful!")
+        print("Build and flash successful!")
         return True
     
     def _restart_monitoring(self):
@@ -713,14 +717,14 @@ class InteractiveSession:
                 start = max(0, line_num - 5)
                 end = min(len(lines), line_num + 5)
                 context = "\n".join(f"{i+1}: {lines[i]}" for i in range(start, end))
-                self._show_info(f"Code context:\n{context}")
+                print(f"Code context:\n{context}")
                 return
         
-        self._show_info("Could not locate specific code. Please check the project files.")
+        print("Could not locate specific code. Please check the project files.")
     
     def _edit_configuration(self, match: LogMatch):
         """Open configuration for editing."""
-        self._show_info("Please edit the configuration file and then click OK to retry.")
+        self._prompt_physical_action("Please edit the configuration file and then click OK to retry.")
         if self._ask_yes_no("Configuration updated. Retry?"):
             self._restart_monitoring()
     
@@ -736,7 +740,7 @@ class InteractiveSession:
         """Abort the session with error."""
         self.state = SessionState.ERROR
         self._log_event("session_aborted", {"reason": reason})
-        self._show_error(f"Session aborted: {reason}")
+        print(f"ERROR: Session aborted: {reason}", file=sys.stderr)
         if self.watcher:
             self.watcher.stop()
         sys.exit(1)
@@ -768,8 +772,9 @@ class InteractiveSession:
                 if k in enabled
             }
         
-        # Show info
-        self._show_info(f"Monitoring started on {self.config.port}\nWatching for: {', '.join(self.config.patterns)}")
+        # Show info on console (not zenity)
+        print(f"Monitoring started on {self.config.port}")
+        print(f"Watching for: {', '.join(self.config.patterns)}")
         
         # Start watching (blocks until interrupted)
         self.watcher.start()
@@ -784,22 +789,24 @@ class InteractiveSession:
         3. Start monitoring
         4. Handle detected patterns
         """
-        self._show_info(
-            f"Interactive Firmware Development Session\n"
-            f"Session ID: {self.session_id}\n\n"
-            f"Project: {self.config.project_path}\n"
-            f"Platform: {self.config.platform}\n"
-            f"Target: {self.config.target}\n"
-            f"Port: {self.config.port}\n\n"
-            f"The AI will handle all software actions automatically.\n"
-            f"You'll only be prompted for physical actions."
-        )
+        # Print session info to console (not zenity)
+        print("=" * 60)
+        print("Interactive Firmware Development Session")
+        print("=" * 60)
+        print(f"Session ID: {self.session_id}")
+        print(f"Project: {self.config.project_path}")
+        print(f"Platform: {self.config.platform}")
+        print(f"Target: {self.config.target}")
+        print(f"Port: {self.config.port}")
+        print()
+        print("The AI will handle all software actions automatically.")
+        print("You'll only be prompted for physical actions.")
+        print("=" * 60)
         
-        # Initial build and flash (SOFTWARE ACTION)
-        if self._ask_yes_no("Build and flash firmware now?"):
-            if not self._build_and_flash():
-                if not self._ask_yes_no("Build/flash failed. Continue with monitoring only?"):
-                    return
+        # Initial build and flash (SOFTWARE ACTION - no prompt, just do it)
+        if not self._build_and_flash():
+            print("ERROR: Initial build/flash failed. Exiting.", file=sys.stderr)
+            sys.exit(1)
         
         # Start monitoring
         self.start_monitoring()

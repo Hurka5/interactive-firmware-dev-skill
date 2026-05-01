@@ -1,31 +1,52 @@
 # Interactive Firmware Development Skill
 
-AI-assisted firmware development with Zenity prompts for **physical actions only**. The AI automatically detects when physical intervention is needed during debugging and testing - no trigger phrases required. The AI handles all software operations automatically and only asks the user to perform physical actions it cannot do itself.
+AI-assisted firmware development where you help by performing physical actions. The AI handles all the software work automatically and only asks for your help when it needs hands-on hardware interaction.
 
-## Core Principle
+## What You Can Do To Help
 
-**AI handles software. User handles physical.**
+During firmware development and testing, the AI will occasionally need your help with physical actions:
 
-| AI Handles (Automatically) | User Handles (Zenity Prompts) |
-|---------------------------|------------------------------|
-| Building firmware | Moving NFC cards |
-| Flashing device | Rotating encoders |
-| Software reset | Pressing buttons |
-| Changing config | Power cycling |
-| Analyzing logs | Connecting hardware |
-| Applying fixes | Triggering sensors |
+### 1. Card/Token Testing
+- **Tap NFC/RFID cards** on the reader when asked
+- **Remove cards** when the AI detects they're still present
+- **Use different cards** (white card, blue card, etc.) for comparison testing
+- **Hold cards** for specific durations to test detection timing
 
-## Supported Platforms
+### 2. Encoder/Knob Testing
+- **Rotate encoders** clockwise or counter-clockwise by specific numbers of clicks
+- **Press encoder buttons** for testing button functionality
+- **Set encoders to specific positions** for calibration
 
-- **ESP-IDF**: ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6
-- **Arduino**: ESP32, ESP8266, AVR, ARM
-- **PlatformIO**: Universal embedded development (auto-detected)
+### 3. Button Testing
+- **Press buttons** when prompted for input testing
+- **Hold buttons** for duration tests (e.g., "hold for 2 seconds")
+- **Press button combinations** for multi-button tests
+
+### 4. Hardware State Changes
+- **Power cycle devices** (unplug and replug USB) when software reset fails
+- **Enter boot mode** by holding BOOT button and pressing RST
+- **Connect or disconnect** peripherals and modules
+- **Flip physical switches** for configuration changes
+
+### 5. Sensor Triggering
+- **Wave your hand** in front of motion/PIR sensors
+- **Cover and uncover** light sensors with your hand
+- **Shine a flashlight** on light sensors
+- **Blow warm air** on temperature sensors
+- **Move magnets** near hall effect sensors
+- **Press** on pressure/force sensors
+
+### 6. Physical Configuration
+- **Adjust trim potentiometers** with a small screwdriver
+- **Change jumper positions** on pin headers
+- **Insert or remove** SD cards
+- **Connect/disconnect** cables and modules
 
 ## Installation
 
 ### Prerequisites
 
-1. **Zenity** - GTK dialog tool for prompts:
+1. **Zenity** - For the popup dialogs:
    ```bash
    # Ubuntu/Debian
    sudo apt-get install zenity
@@ -37,242 +58,101 @@ AI-assisted firmware development with Zenity prompts for **physical actions only
    sudo pacman -S zenity
    ```
 
-2. **Python 3.7+** - For the session manager:
+2. **Python 3.7+** - Usually pre-installed:
    ```bash
-   # Usually pre-installed on most Linux distributions
    python3 --version
-   ```
-
-3. **PlatformIO** (optional - AI will auto-install if needed):
-   ```bash
-   # Only needed if you want to use it manually
-   pip install platformio
    ```
 
 ### Install the Skill
 
-Clone the repository:
 ```bash
 git clone https://github.com/Hurka5/interactive-firmware-dev-skill.git
 cd interactive-firmware-dev-skill
-```
-
-Make scripts executable:
-```bash
 chmod +x scripts/*.py scripts/*.sh
-```
-
-Test the installation:
-```bash
-# Test Zenity
-./scripts/zenity_prompt.sh --info "Test message"
-
-# Test log watcher (without device)
-./scripts/log_watcher.py --help
 ```
 
 ## Quick Start
 
 ```bash
-# Start interactive session - AI only prompts for physical actions
+# Start a session - AI will prompt you when it needs physical help
 ./scripts/interactive_session.py --project ./my_project --port /dev/ttyUSB0
-
-# Example: NFC card testing
-# AI: "Building... Flashing... Monitoring..."
-# AI: [Zenity] "Please tap the NFC card on the reader"
-# User: [Taps card, clicks OK]
-# AI: "Card detected! UID: 0xA1B2C3D4"
-# AI: [Zenity] "Please remove the card"
 ```
 
-## Physical Action Categories
+**What happens:**
+1. AI builds and flashes the firmware automatically
+2. AI starts monitoring the device logs
+3. When the AI needs physical help, a popup appears asking you to:
+   - Tap a card
+   - Rotate a knob
+   - Press a button
+   - etc.
+4. You perform the action and click OK
+5. AI continues monitoring and may ask for more help as needed
 
-### 1. Card/Token Interactions
-- Tap NFC/RFID card on reader
-- Remove card from reader
-- Present different card
-- Hold card for X seconds
-- Test card reading range
-
-### 2. Encoder/Knob Interactions
-- Rotate encoder clockwise X clicks
-- Rotate encoder counter-clockwise X clicks
-- Press encoder button
-- Set encoder to specific position
-
-### 3. Button Interactions
-- Press button A
-- Press and hold button B
-- Press button combinations
-- Rapid press testing
-
-### 4. Hardware State Changes
-- Power cycle device (unplug/replug)
-- Enter boot mode (hold BOOT + press RST)
-- Connect/disconnect peripherals
-- Flip physical switches
-
-### 5. Sensor Triggering
-- Wave hand in front of motion sensor
-- Cover/uncover light sensor
-- Shine light on sensor
-- Blow on temperature sensor
-- Move magnet near hall sensor
-- Press on pressure sensor
-
-### 6. Physical Configuration
-- Adjust trim potentiometer
-- Change jumper positions
-- Insert/remove SD cards
-- Connect/disconnect cables
-
-## When to Prompt vs Auto-Handle
-
-### ❌ AI Handles Automatically (No Prompts)
-
-```
-"Building firmware..."                    → AI builds
-"Flashing to device..."                   → AI flashes  
-"Software reset..."                       → AI resets via command
-"Updating I2C address in config..."       → AI edits file
-"Retrying with new baud rate..."          → AI retries
-"Analyzing crash log..."                  → AI parses
-"Applying code fix..."                    → AI edits code
-"Installing PlatformIO..."                  → AI installs via pip
-```
-
-### ✅ AI Prompts User (Physical Only)
-
-```
-"Please tap the NFC card on the reader"
-"Rotate the volume encoder clockwise 3 clicks"
-"Press and hold the BOOT button for 2 seconds"
-"Power cycle the device (unplug USB, wait 3s, replug)"
-"Wave your hand in front of the PIR sensor"
-"Connect the sensor module to the I2C pins"
-```
-
-## Platform Support
-
-The skill auto-detects your project type:
-
-| Platform | Detected By | Build | Flash |
-|----------|-------------|-------|-------|
-| **PlatformIO** | `platformio.ini` | `pio run` | `pio run --target upload` |
-| **ESP-IDF** | `CMakeLists.txt` + `sdkconfig` | `idf.py build` | `idf.py flash` |
-| **Arduino** | `*.ino` files | `pio run` or `make` | `pio run --target upload` |
-
-PlatformIO will be automatically installed if needed.
-
-## Zenity Dialog Examples
-
-### Simple Physical Action
-```bash
-zenity --info \
-  --title="🔧 Physical Action Required" \
-  --text="Please tap the NFC card on the reader, then click OK."
-```
-
-### Detailed Physical Action
-```bash
-zenity --info \
-  --title="🔧 Step 2 of 4: Rotate Encoder" \
-  --text="<b>Physical Action Required</b>\n\nPlease rotate the volume encoder <b>clockwise 3 clicks</b>.\n\n📍 Location: Blue encoder on the right side\n⏱️  Timing: Rotate until you feel 3 detents" \
-  --width=400
-```
-
-### Hardware Reset
-```bash
-zenity --info \
-  --title="🔧 Hardware Reset Required" \
-  --text="<b>Power cycle needed.</b>\n\n1. Unplug USB cable\n2. Wait 3 seconds\n3. Plug USB cable back in\n\n⚠️  Software reset failed - hardware power cycle required."
-```
-
-## Workflow Example: NFC Testing
+## Example Session: NFC Card Testing
 
 ```
 AI: Building firmware... ✓
-AI: Flashing to ESP32... ✓
+AI: Flashing to device... ✓
 AI: Starting monitor... ✓
 
-[Zenity] "Step 1: Please ensure no NFC card is near the reader"
-User: [Clicks OK]
+[Popup] "Please ensure no NFC card is near the reader"
+You: [Make sure no cards are present, click OK]
 
 AI: Log: "NFC reader initialized. Waiting for card..."
 
-[Zenity] "Step 2: Please tap the WHITE card on the reader"
-User: [Taps card, clicks OK]
+[Popup] "Please tap the WHITE card on the reader"
+You: [Tap the white card on the reader, click OK]
 
 AI: Log: "Card detected! UID: 0xA1B2C3D4"
 AI: Log: "Read successful"
 
-[Zenity] "Step 3: Please remove the card"
-User: [Removes card, clicks OK]
+[Popup] "Please remove the card"
+You: [Remove the card, click OK]
 
 AI: Log: "Card removed. Waiting..."
 
-[Zenity] "✓ Test complete!"
+[Popup] "✓ Test complete!"
 ```
 
-## Scripts
+## What the AI Handles (You Don't Need To Worry About)
 
-| Script | Purpose |
-|--------|---------|
-| `interactive_session.py` | Main session manager - coordinates building, flashing, monitoring, **physical prompts only** |
-| `log_watcher.py` | Log monitoring with pattern detection |
-| `zenity_prompt.sh` | Zenity wrapper with physical action templates |
+The AI automatically handles all software tasks:
+- Building firmware
+- Flashing to device
+- Software resets
+- Configuration changes
+- Log analysis
+- Code fixes
+- Installing tools (like PlatformIO)
 
-## Resources
+**You only interact when a popup asks for physical help.**
 
-- **SKILL.md** - Main skill instructions for AI
-- **references/decision-matrix.md** - Physical vs software guidelines
-- **references/physical-action-templates.md** - Ready-to-use Zenity templates
-- **references/log-patterns.md** - Common log patterns
-- **examples/nfc-testing-session.md** - Complete NFC test walkthrough
-- **examples/encoder-testing-session.md** - Complete encoder test walkthrough
+## Supported Hardware
 
-## Decision Matrix Quick Reference
+The AI works with:
+- **ESP32** (all variants) via ESP-IDF or PlatformIO
+- **Arduino** boards (ESP32, ESP8266, AVR, ARM)
+- **Any PlatformIO project**
 
-| Situation | Who Handles It |
-|-----------|---------------|
-| Build/flash/reset | AI (software) |
-| Config changes | AI (software) |
-| Log analysis | AI (software) |
-| Code fixes | AI (software) |
-| PlatformIO install | AI (software) |
-| Move NFC card | **User (physical)** |
-| Rotate encoder | **User (physical)** |
-| Press button | **User (physical)** |
-| Power cycle | **User (physical)** |
-| Connect hardware | **User (physical)** |
-| Trigger sensor | **User (physical)** |
+The AI auto-detects your project type.
 
 ## Command Reference
 
 ```bash
-# Start interactive session (auto-detects platform)
+# Start a session (auto-detects project type)
 ./scripts/interactive_session.py --project ./my_project --port /dev/ttyUSB0
 
-# Specify platform explicitly
-./scripts/interactive_session.py --project ./my_project --platform platformio
-
-# Watch logs only (no interaction)
-./scripts/log_watcher.py --port /dev/ttyUSB0 --patterns "error,warning"
-
-# Manual zenity prompt
-./scripts/zenity_prompt.sh --question "Continue testing?"
+# Specify your serial port if different
+./scripts/interactive_session.py --project ./my_project --port /dev/ttyACM0
 ```
 
-## How It Works
+## Tips
 
-The AI automatically detects when physical intervention is needed by:
-
-1. **Monitoring logs** for specific patterns (card detection, sensor triggers, errors)
-2. **Tracking test flow** (knowing when to ask for card tap vs card removal)
-3. **Detecting hardware states** (when software reset fails, prompting for power cycle)
-4. **Recognizing test checkpoints** (when user verification is needed)
-
-No trigger phrases required - the AI knows when to prompt based on the current debugging/testing context.
+- **Keep the terminal visible** - you'll see what the AI is doing
+- **Watch for popups** - that's when the AI needs your physical help
+- **Be ready to interact** - have your cards, hands, or tools ready
+- **Click OK promptly** after performing the action so the AI can continue
 
 ## License
 
