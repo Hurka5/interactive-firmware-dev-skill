@@ -147,6 +147,56 @@ ssid = result.stdout.strip()
 - AI Python scripts: Use Zenity for ALL user interaction
 - NEVER use: `input()`, `getpass`, `sys.stdin`, or any CLI prompts
 
+## ⚠️ Zenity is ONLY for Physical Actions, NOT Status Messages
+
+### The Rule
+**Use Zenity ONLY when the user needs to perform a physical action. Status messages go to console.**
+
+### ❌ WRONG - Using Zenity for status messages
+```python
+# DON'T DO THIS - Zenity for status
+subprocess.run(["zenity", "--info", "--text=Building firmware..."])  # ❌ NO
+subprocess.run(["zenity", "--info", "--text=Flashing device..."])    # ❌ NO
+subprocess.run(["zenity", "--info", "--text=Starting monitor..."])   # ❌ NO
+```
+
+**WHY IT'S WRONG:**
+- User doesn't need to see a popup for things the AI is doing
+- Popups interrupt the user unnecessarily
+- Console output is sufficient for status updates
+- Zenity should only grab attention when user action is required
+
+### ✅ RIGHT - Console for status, Zenity for physical actions
+```python
+# CORRECT: Status messages to console
+print("Building firmware...")      # ✓ Console is fine
+print("Flashing device...")          # ✓ Console is fine
+print("Monitoring logs...")        # ✓ Console is fine
+
+# CORRECT: Zenity ONLY for physical actions
+subprocess.run(["./scripts/zenity_prompt.sh", "--info",
+                "Please tap the NFC card on the reader"])  # ✓ Physical action
+
+subprocess.run(["./scripts/zenity_prompt.sh", "--info",
+                "Wait until you hear the music play, then click OK"])  # ✓ Context matters
+```
+
+### When to Use Zenity vs Console
+
+| Situation | Use Console (print) | Use Zenity (popup) |
+|-----------|---------------------|-------------------|
+| Building firmware | ✓ `print("Building...")` | ❌ Don't popup |
+| Flashing device | ✓ `print("Flashing...")` | ❌ Don't popup |
+| Reading logs | ✓ `print("Reading...")` | ❌ Don't popup |
+| Tap NFC card | ❌ Not a status | ✓ Zenity popup |
+| Press button | ❌ Not a status | ✓ Zenity popup |
+| Wait for music | ❌ Not a status | ✓ Zenity popup (context matters) |
+| Rotate encoder | ❌ Not a status | ✓ Zenity popup |
+| Power cycle | ❌ Not a status | ✓ Zenity popup |
+
+### The Real Golden Rule
+**Zenity is for PHYSICAL ACTIONS only. Everything else goes to console.**
+
 ## Quick Start
 
 ```bash
@@ -154,11 +204,12 @@ ssid = result.stdout.strip()
 ./scripts/interactive_session.py --project ./nfc_project --port /dev/ttyUSB0
 
 # Example: NFC card testing
-# AI: "Building firmware..."
-# AI: "Resetting device..."
-# AI: [Zenity] "Please tap the NFC card on the reader, then click OK"
-# AI: "Card detected! UID: 0xA1B2C3D4"
-# AI: [Zenity] "Please remove the card, then click OK"
+# AI: [Console] "Building firmware..."
+# AI: [Console] "Flashing device..."
+# AI: [Console] "Monitoring logs..."
+# AI: [Zenity] "Please tap the NFC card on the reader"  ← Only for physical action
+# AI: [Console] "Card detected! UID: 0xA1B2C3D4"
+# AI: [Zenity] "Please remove the card"  ← Only for physical action
 ```
 
 ## Physical Action Categories
@@ -499,11 +550,12 @@ This verifies the full read/write communication chain.
 ### Typical NFC Testing Session (Context-Aware)
 
 ```
-AI: Building firmware... ✓
-AI: Flashing to ESP32... ✓
-AI: Starting serial monitor... ✓
+[Console] AI: Building firmware...
+[Console] AI: Flashing to ESP32...
+[Console] AI: Starting serial monitor...
+[Console] AI: Monitoring logs... (logs appear below)
 
-[Zenity] 🔧 TEST: Baseline - No Card Present
+[Zenity Popup] 🔧 TEST: Baseline - No Card Present
 
 Establishing baseline: Verifying reader detects NO card when none present.
 
@@ -596,11 +648,12 @@ The NFC reader is working correctly!
 ### Typical Encoder Testing Session (Context-Aware)
 
 ```
-AI: Building firmware... ✓
-AI: Flashing... ✓
-AI: Starting monitor... ✓
+[Console] AI: Building firmware...
+[Console] AI: Flashing...
+[Console] AI: Starting monitor...
+[Console] AI: Monitoring logs...
 
-[Zenity] 🔧 TEST: Encoder Center Position
+[Zenity Popup] 🔧 TEST: Encoder Center Position
 
 Calibrating encoder - finding the middle position for reference.
 
@@ -700,11 +753,12 @@ The encoder is working correctly!
 ### Error Recovery Example: When Things Go Wrong
 
 ```
-AI: Building firmware... ✓
-AI: Flashing... ✓
-AI: Starting monitor... ✓
+[Console] AI: Building firmware...
+[Console] AI: Flashing...
+[Console] AI: Starting monitor...
+[Console] AI: Monitoring logs...
 
-[Zenity] 🔧 TEST: Button Press Detection
+[Zenity Popup] 🔧 TEST: Button Press Detection
 
 Testing GPIO interrupt and debouncing for the USER button.
 

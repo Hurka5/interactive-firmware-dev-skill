@@ -152,9 +152,10 @@ The AI explains what it's testing and why, so you understand the purpose of each
 ### NFC Card Testing with Context
 
 ```
-AI: Building firmware... ✓
-AI: Flashing to device... ✓
-AI: Starting monitor... ✓
+[Console] AI: Building firmware...
+[Console] AI: Flashing to device...
+[Console] AI: Starting monitor...
+[Console] AI: Monitoring logs... (logs appear here in real-time)
 
 [Popup] 🔧 TEST: Baseline - No Card Present
 
