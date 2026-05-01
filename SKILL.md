@@ -219,55 +219,311 @@ Please power cycle the device.
 Click OK when the device has rebooted (you'll see the boot messages).
 ```
 
+## Direct Testing Approach
+
+The AI should be direct and context-aware when asking for physical actions. Always explain WHAT is being tested and WHY.
+
+### Principle: Test with Purpose
+
+Every prompt should clearly state:
+1. **What action** to perform
+2. **What is being tested** (the purpose)
+3. **What to expect** (so user knows if it worked)
+
+### Context-Aware Prompts
+
+**❌ BAD: Vague prompt**
+```
+"Please tap the card"
+```
+
+**✅ GOOD: Context-aware prompt**
+```
+🔧 TEST: NFC Card Detection
+
+I'm testing if the PN532 reader can detect MIFARE Classic cards.
+
+📋 What to do: Tap the WHITE card on the reader
+⏱️  Timing: Hold for 2 seconds
+
+✓ Expected: Blue LED lights up + log shows "Card detected"
+
+This verifies the I2C communication and antenna are working.
+```
+
+### Testing with Timing/Sequence
+
+When testing sequences (like tap-and-remove), explain the full flow:
+
+```
+🔧 TEST: Card Presence Detection
+
+Testing the reader's ability to detect when cards arrive and leave.
+
+📋 Step 1: Tap the card and HOLD it
+⏱️  Keep holding while I verify detection...
+
+✓ Expected: "Card detected" in logs
+
+[User clicks OK after seeing detection]
+
+---
+
+🔧 TEST: Card Removal Detection
+
+Now testing if the reader detects when the card is removed.
+
+📋 Step 2: REMOVE the card now
+⏱️  Remove completely (10cm away)
+
+✓ Expected: "Card removed" in logs
+
+This tests the presence detection loop.
+```
+
+### Error Recovery: Ask What Happened
+
+When something unexpected occurs, the AI should ask the user for context:
+
+**Scenario: Expected card detection but nothing happened**
+```
+⚠️  UNEXPECTED RESULT
+
+I expected the card to be detected, but no detection occurred.
+
+Possible causes:
+- Card not positioned correctly
+- Wrong card type
+- Reader not powered
+- Communication error
+
+❓ What happened on your end?
+[ ] I tapped the card but no LED lit up
+[ ] I couldn't tap the card yet
+[ ] The LED lit but logs don't show detection
+[ ] Something else happened (please describe)
+
+This helps me determine if it's a hardware or software issue.
+```
+
+**Scenario: Unexpected reset detected**
+```
+⚠️  DEVICE RESET DETECTED
+
+The device rebooted unexpectedly during the test.
+
+❓ Did you:
+[ ] Press the reset button intentionally
+[ ] Power cycle the device
+[ ] Disconnect/reconnect USB
+[ ] None of the above - it reset on its own
+
+This helps me distinguish between intentional actions and crashes.
+```
+
+**Scenario: Wrong input detected**
+```
+⚠️  UNEXPECTED INPUT
+
+I detected a button press, but I was waiting for an encoder rotation.
+
+❓ Did you:
+[ ] Press the button by mistake
+[ ] Press the button intentionally to test something
+[ ] The device has only one input (button, not encoder)
+[ ] Something else
+
+This helps me adapt the test to your actual hardware.
+```
+
+### Direct Test Examples
+
+**Button Test (Direct)**
+```
+🔧 TEST: Button Input
+
+Testing GPIO button debouncing and detection.
+
+📋 Action: Press the USER button once
+⏱️  Quick press and release (like a click)
+
+✓ Expected: Log shows "Button pressed" and "Button released"
+
+This verifies the interrupt and debounce logic.
+```
+
+**Encoder Test (Direct with Context)**
+```
+🔧 TEST: Encoder Clockwise Rotation
+
+Testing encoder direction detection.
+
+📋 Action: Rotate the knob CLOCKWISE 3 clicks
+🔄 Direction: → (right/forward)
+
+✓ Expected: Logs show position increasing (e.g., 50 → 51 → 52 → 53)
+
+This verifies the CLK/DT pin decoding.
+```
+
+**NFC Communication Test (Context-Rich)**
+```
+🔧 TEST: NFC Read/Write Communication
+
+Testing if I can read and write data to the MIFARE card.
+
+📋 Step 1: Tap and HOLD the card
+💾 I'm writing test data to block 4...
+✓ Write successful
+
+📋 Step 2: Keep holding - now reading back...
+✓ Read successful - data matches!
+
+📋 Step 3: You can remove the card
+
+This verifies the full read/write communication chain.
+```
+
 ## Workflow Integration
 
-### Typical NFC Testing Session
+### Typical NFC Testing Session (Context-Aware)
 
 ```
 AI: Building firmware... ✓
 AI: Flashing to ESP32... ✓
 AI: Starting serial monitor... ✓
 
-[Zenity] "Step 1: Please ensure no NFC card is near the reader"
-User: [Clicks OK]
+[Zenity] 🔧 TEST: Baseline - No Card Present
+
+Establishing baseline: Verifying reader detects NO card when none present.
+
+📋 Action: Ensure no NFC cards are near the reader (10cm away)
+✓ Expected: Logs show "Waiting for card..." continuously
+
+This confirms the reader isn't stuck detecting a phantom card.
+
+User: [Ensures no cards, clicks OK]
 
 AI: Log: "NFC reader initialized. Waiting for card..."
+AI: Log: "No card detected (baseline established)"
 
-[Zenity] "Step 2: Please tap Card A (the white card) on the reader"
-User: [Taps card, clicks OK]
+---
 
-AI: Log: "Card detected! UID: 0xA1B2C3D4, Type: MIFARE Classic"
+[Zenity] 🔧 TEST: Card Detection - White Card (MIFARE Classic)
+
+Testing if the reader detects MIFARE Classic cards and reads the UID.
+
+📋 Action: Tap the WHITE card on the reader
+⏱️  Hold for 2 seconds while I verify detection
+
+✓ Expected: 
+  - Blue LED lights up
+  - Log shows: "Card detected! UID: 0x..."
+  - Log shows: "Type: MIFARE Classic"
+
+This verifies antenna coupling and basic communication.
+
+User: [Taps white card, sees LED, clicks OK]
+
+AI: Log: "Card detected! UID: 0xA1B2C3D4"
+AI: Log: "Type: MIFARE Classic 1K"
 AI: Log: "Authentication successful"
 AI: Log: "Read 16 bytes from block 4"
 
-[Zenity] "Step 3: Please remove the card from the reader"
-User: [Removes card, clicks OK]
+---
 
-AI: Log: "Card removed. Waiting..."
+[Zenity] 🔧 TEST: Card Removal Detection
 
-[Zenity] "Step 4: Please tap Card B (the blue card) on the reader"
-User: [Taps card, clicks OK]
+Testing if the reader detects when the card is removed.
 
-AI: Log: "Card detected! UID: 0xE5F6G7H8, Type: NTAG213"
-AI: Log: "Read NDEF message: 'https://example.com'"
+📋 Action: REMOVE the white card completely
+⏱️  Lift card 10cm away from reader
 
-[Zenity] "✓ Test complete! Both cards working correctly."
+✓ Expected: Blue LED turns off + log shows "Card removed"
+
+This verifies the presence detection loop is working.
+
+User: [Removes card, sees LED off, clicks OK]
+
+AI: Log: "Card removed"
+AI: Log: "Waiting for next card..."
+
+---
+
+[Zenity] 🔧 TEST: Card Detection - Blue Card (NTAG213)
+
+Testing a different card type (NTAG213) to verify protocol handling.
+
+📋 Action: Tap the BLUE card on the reader
+⏱️  Hold for 2 seconds
+
+✓ Expected: 
+  - Blue LED lights up
+  - Log shows: "Type: NTAG213"
+  - Log shows NDEF message content
+
+This verifies the reader handles different NFC types correctly.
+
+User: [Taps blue card, clicks OK]
+
+AI: Log: "Card detected! UID: 0xE5F6A7B8"
+AI: Log: "Type: NTAG213"
+AI: Log: "NDEF message found"
+AI: Log: "NDEF content: 'https://example.com'"
+
+---
+
+[Zenity] ✓ ALL TESTS PASSED
+
+Both card types detected and read correctly:
+- ✓ MIFARE Classic: UID read, data block read
+- ✓ NTAG213: UID read, NDEF message read
+- ✓ Presence detection: Arrival and departure both detected
+
+The NFC reader is working correctly!
 ```
 
-### Typical Encoder Testing Session
+### Typical Encoder Testing Session (Context-Aware)
 
 ```
 AI: Building firmware... ✓
 AI: Flashing... ✓
 AI: Starting monitor... ✓
 
-[Zenity] "Step 1: Set encoder to middle position (rotate to center detent)"
-User: [Adjusts, clicks OK]
+[Zenity] 🔧 TEST: Encoder Center Position
+
+Calibrating encoder - finding the middle position for reference.
+
+📋 Action: Rotate encoder to find the center detent
+🎯 Target: Middle of rotation range (will be set as position 50)
+
+✓ Expected: You feel a tactile "click" or resistance at center
+
+This establishes a known starting point for directional tests.
+
+User: [Rotates to center, clicks OK]
 
 AI: Log: "Encoder position: 50 (center)"
+AI: Log: "Center position calibrated"
 
-[Zenity] "Step 2: Rotate encoder clockwise 5 clicks"
-User: [Rotates, clicks OK]
+---
+
+[Zenity] 🔧 TEST: Clockwise Rotation Detection
+
+Testing if clockwise rotation increases the position value.
+
+📋 Action: Rotate encoder CLOCKWISE exactly 5 clicks
+🔄 Direction: → (right/forward)
+📊 Current: 50 → Expected: 55
+
+✓ Expected: Logs show position increasing by 1 each click:
+  "Encoder: +1 (position: 51)"
+  "Encoder: +1 (position: 52)"
+  ...through 55
+
+This verifies the CLK/DT pin decoding for clockwise direction.
+
+User: [Rotates 5 clicks CW, clicks OK]
 
 AI: Log: "Encoder: +1 (position: 51)"
 AI: Log: "Encoder: +1 (position: 52)"
@@ -275,13 +531,167 @@ AI: Log: "Encoder: +1 (position: 53)"
 AI: Log: "Encoder: +1 (position: 54)"
 AI: Log: "Encoder: +1 (position: 55)"
 
-[Zenity] "Step 3: Press the encoder button"
-User: [Presses, clicks OK]
+---
+
+[Zenity] 🔧 TEST: Counter-Clockwise Rotation Detection
+
+Testing if counter-clockwise rotation decreases the position value.
+
+📋 Action: Rotate encoder COUNTER-CLOCKWISE exactly 3 clicks
+🔄 Direction: ← (left/backward)
+📊 Current: 55 → Expected: 52
+
+✓ Expected: Logs show position decreasing by 1 each click:
+  "Encoder: -1 (position: 54)"
+  "Encoder: -1 (position: 53)"
+  "Encoder: -1 (position: 52)"
+
+This verifies direction detection is working both ways.
+
+User: [Rotates 3 clicks CCW, clicks OK]
+
+AI: Log: "Encoder: -1 (position: 54)"
+AI: Log: "Encoder: -1 (position: 53)"
+AI: Log: "Encoder: -1 (position: 52)"
+
+---
+
+[Zenity] 🔧 TEST: Encoder Button Press
+
+Testing the integrated push-button on the encoder shaft.
+
+📋 Action: Press the encoder button (push the shaft down)
+⏱️  Quick press and release (like a mouse click)
+
+✓ Expected: Log shows "Button pressed!" and "Button released"
+
+This verifies the SW (switch) pin connection and debouncing.
+
+User: [Presses button, clicks OK]
 
 AI: Log: "Button pressed!"
-AI: Log: "Selected option: 55"
+AI: Log: "Button released"
+AI: Log: "Selected option: 52"
 
-[Zenity] "✓ Encoder test passed!"
+---
+
+[Zenity] ✓ ALL TESTS PASSED
+
+Encoder functionality verified:
+- ✓ Center position calibration
+- ✓ Clockwise rotation: 5 steps detected correctly
+- ✓ Counter-clockwise rotation: 3 steps detected correctly
+- ✓ Direction detection: Both directions working
+- ✓ Button press: Detected and debounced correctly
+
+The encoder is working correctly!
+```
+
+### Error Recovery Example: When Things Go Wrong
+
+```
+AI: Building firmware... ✓
+AI: Flashing... ✓
+AI: Starting monitor... ✓
+
+[Zenity] 🔧 TEST: Button Press Detection
+
+Testing GPIO interrupt and debouncing for the USER button.
+
+📋 Action: Press the USER button once
+⏱️  Quick press and release
+
+✓ Expected: Log shows "Button pressed!" then "Button released"
+
+User: [Accidentally presses RESET instead of USER button]
+
+AI: Log: "ets Jun  8 2016 00:22:57"
+AI: Log: "rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)"
+AI: Log: "Rebooting..."
+
+⚠️  DEVICE RESET DETECTED
+
+The device rebooted unexpectedly during the button test.
+
+❓ Did you:
+[ ] Press the RESET button by mistake (meant to press USER)
+[ ] Press RESET intentionally to restart the test
+[ ] The device crashed on its own
+[ ] Something else happened
+
+This helps me distinguish between intentional actions and crashes.
+
+User: [Selects "Pressed RESET by mistake"]
+
+AI: Understood! You pressed RESET instead of USER. Let me restart the test.
+AI: Re-flashing firmware... ✓
+
+[Zenity] 🔧 TEST: Button Press Detection (Retry)
+
+Let's try again. The USER button is the small black button next to the RESET button.
+
+📋 Action: Press the USER button (not RESET!)
+   USER button location: [diagram showing board]
+
+User: [Presses correct button, clicks OK]
+
+AI: Log: "Button pressed!"
+AI: Log: "Button released"
+
+[Zenity] ✓ TEST PASSED
+
+Button detection working correctly!
+```
+
+### Error Recovery Example: Wrong Input Detected
+
+```
+AI: Monitoring logs...
+
+[Zenity] 🔧 TEST: Encoder Rotation
+
+Testing encoder clockwise rotation.
+
+📋 Action: Rotate the encoder CLOCKWISE 3 clicks
+📊 Current position: 50
+
+User: [Rotates counter-clockwise instead]
+
+AI: Log: "Encoder: -1 (position: 49)"
+AI: Log: "Encoder: -1 (position: 48)"
+AI: Log: "Encoder: -1 (position: 47)"
+
+⚠️  UNEXPECTED ROTATION DIRECTION
+
+I expected clockwise rotation (position increasing), 
+but detected counter-clockwise (position decreasing).
+
+❓ What happened:
+[ ] I rotated the wrong way by mistake
+[ ] The encoder is wired backwards (CLK/DT swapped)
+[ ] I rotated correctly but logs show wrong direction
+[ ] Something else
+
+User: [Selects "Rotated wrong way by mistake"]
+
+AI: No problem! Let's try again.
+
+[Zenity] 🔧 TEST: Encoder Rotation (Retry)
+
+Rotate the encoder CLOCKWISE (to the right) 3 clicks.
+
+📋 Action: Rotate RIGHT → → → 3 clicks
+📊 Current position: 47 → Expected: 50
+
+User: [Rotates correctly, clicks OK]
+
+AI: Log: "Encoder: +1 (position: 48)"
+AI: Log: "Encoder: +1 (position: 49)"
+AI: Log: "Encoder: +1 (position: 50)"
+
+[Zenity] ✓ TEST PASSED
+
+Clockwise rotation detected correctly!
 ```
 
 ## Decision Matrix: Prompt or Auto?
