@@ -618,31 +618,32 @@ class InteractiveSession:
                         "reason": step1_problem
                     })
                     
-                    # Ask what to do next
-                    choice = self._ask_choice(
-                        f"Action failed: {step1_problem}\n\nWhat would you like to do?",
-                        [
-                            "🔄 Retry this step",
-                            "🔧 Check hardware connections",
-                            "⏭️  Skip to next step",
-                            "❌ Abort session"
-                        ],
-                        timeout=30
-                    )
-                    
-                    if choice == "🔄 Retry this step":
+                    # Ask what to do next - binary decisions only
+                    if self._ask_yes_no_custom(
+                        f"Action failed: {step1_problem}\n\nRetry this step?",
+                        ok_label="🔄 Retry",
+                        cancel_label="⏭️ Skip",
+                        timeout=30,
+                        prompt_type="TYPE 2"
+                    ):
                         self._handle_info_match(match, context_msg)
                         return
-                    elif choice == "🔧 Check hardware connections":
-                        self._prompt_physical_action("Please check:\n- Power connections\n- Signal wires\n- Component mounting\n- Battery level")
-                        if self._ask_yes_no("Hardware checked. Retry this step?"):
-                            self._handle_info_match(match, context_msg)
-                            return
-                    elif choice == "⏭️  Skip to next step":
+                    else:
+                        # User chose skip - ask if they want to check hardware first
+                        if self._ask_yes_no_custom(
+                            "Check hardware connections first?",
+                            ok_label="🔧 Check hardware",
+                            cancel_label="⏭️ Skip to next",
+                            timeout=30,
+                            prompt_type="TYPE 2"
+                        ):
+                            self._prompt_physical_action("Please check:\n- Power connections\n- Signal wires\n- Component mounting\n- Battery level")
+                            if self._ask_yes_no("Hardware checked. Retry this step?"):
+                                self._handle_info_match(match, context_msg)
+                                return
+                        # Skip to next step
                         self.current_step_index += 1
                         return
-                    elif choice == "❌ Abort session":
-                        self._abort_session("User couldn't perform required action")
                 else:
                     # User didn't specify reason - treat as skip
                     print("\n⚠️  Action not performed - skipping to verification")
@@ -685,32 +686,37 @@ class InteractiveSession:
                 self.current_step_index += 1
             else:
                 # NO - agent stops and waits. User must tell what's wrong.
-                # Now ask what to do next
+                # Now ask what to do next - binary decisions only
                 if problem:
-                    retry_msg = f"Problem reported: {problem}\n\nWhat would you like to do?"
+                    retry_msg = f"Problem reported: {problem}\n\nRetry this step?"
                 else:
-                    retry_msg = "Problem detected. What would you like to do?"
+                    retry_msg = "Problem detected. Retry this step?"
                 
-                choice = self._ask_choice(retry_msg, [
-                    "🔄 Retry this step",
-                    "🔧 Check hardware connections",
-                    "⏭️  Skip to next step",
-                    "❌ Abort session"
-                ], timeout=30)
-                
-                if choice == "🔄 Retry this step":
+                if self._ask_yes_no_custom(
+                    retry_msg,
+                    ok_label="🔄 Retry",
+                    cancel_label="⏭️ Skip",
+                    timeout=30,
+                    prompt_type="TYPE 2"
+                ):
                     self._handle_info_match(match, context_msg)  # Recurse to retry
                     return
-                elif choice == "🔧 Check hardware connections":
-                    self._prompt_physical_action("Please check:\n- Power connections\n- Signal wires\n- Component mounting\n- Battery level")
-                    if self._ask_yes_no("Hardware checked. Retry this step?"):
-                        self._handle_info_match(match, context_msg)
-                        return
-                elif choice == "⏭️  Skip to next step":
+                else:
+                    # User chose skip - ask if they want to check hardware first
+                    if self._ask_yes_no_custom(
+                        "Check hardware connections first?",
+                        ok_label="🔧 Check hardware",
+                        cancel_label="⏭️ Skip to next",
+                        timeout=30,
+                        prompt_type="TYPE 2"
+                    ):
+                        self._prompt_physical_action("Please check:\n- Power connections\n- Signal wires\n- Component mounting\n- Battery level")
+                        if self._ask_yes_no("Hardware checked. Retry this step?"):
+                            self._handle_info_match(match, context_msg)
+                            return
+                    # Skip to next step
                     self.current_step_index += 1
                     return
-                elif choice == "❌ Abort session":
-                    self._abort_session("User aborted at checkpoint")
         else:
             # Generic checkpoint without physical verification
             message = f"CHECKPOINT\n\n{match.log_line}{context_msg}\n\nContinue?"
@@ -798,21 +804,27 @@ class InteractiveSession:
     
     def _fix_wifi_issue(self, match: LogMatch) -> bool:
         """Fix Wi-Fi connection issues - SOFTWARE ACTION."""
-        choice = self._ask_choice("Wi-Fi connection failed. What would you like to do?", [
-            "Enter new SSID/password",
-            "Increase timeout",
-            "Check Wi-Fi scan results",
-            "Skip Wi-Fi for now"
-        ])
-        
-        if choice == "Enter new SSID/password":
+        # Binary decision: Update credentials first?
+        if self._ask_yes_no_custom(
+            "Wi-Fi connection failed. Update SSID/password?",
+            ok_label="✓ Update credentials",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             ssid = self._ask_input("Enter Wi-Fi SSID:", "MyNetwork")
             if ssid:
                 password = self._ask_input("Enter Wi-Fi password:", "")
                 # SOFTWARE ACTION: Update config file
                 self._update_wifi_config(ssid, password)
                 return True
-        elif choice == "Increase timeout":
+        
+        # Ask about timeout
+        if self._ask_yes_no_custom(
+            "Increase connection timeout?",
+            ok_label="✓ Increase timeout",
+            cancel_label="✗ No",
+            prompt_type="TYPE 2"
+        ):
             timeout = self._ask_number("Connection timeout (seconds):", 5, 120, 30)
             if timeout:
                 self._update_config_value("WIFI_TIMEOUT", str(timeout))
@@ -822,35 +834,49 @@ class InteractiveSession:
     
     def _fix_i2c_issue(self, match: LogMatch) -> bool:
         """Fix I2C communication issues - SOFTWARE ACTION."""
-        choice = self._ask_choice("I2C communication failed. What would you like to do?", [
-            "Try alternate address",
-            "Change SDA/SCL pins",
-            "Reduce I2C speed",
-            "Check wiring diagram"
-        ])
-        
-        if choice == "Try alternate address":
+        # Binary decision tree
+        if self._ask_yes_no_custom(
+            "I2C communication failed. Try alternate address?",
+            ok_label="✓ New address",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             addr = self._ask_input("Enter I2C address (hex, e.g., 0x77):", "0x77")
             if addr:
-                # SOFTWARE ACTION: Update config
                 self._update_config_value("I2C_ADDRESS", addr)
                 return True
-        elif choice == "Change SDA/SCL pins":
+        
+        if self._ask_yes_no_custom(
+            "Change SDA/SCL pins?",
+            ok_label="✓ Change pins",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             sda = self._ask_number("SDA pin:", 0, 48, 21)
             scl = self._ask_number("SCL pin:", 0, 48, 22)
             if sda is not None and scl is not None:
-                # SOFTWARE ACTION: Update config
                 self._update_config_value("I2C_SDA_PIN", str(sda))
                 self._update_config_value("I2C_SCL_PIN", str(scl))
                 return True
-        elif choice == "Reduce I2C speed":
+        
+        if self._ask_yes_no_custom(
+            "Reduce I2C speed?",
+            ok_label="✓ Reduce speed",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             speed = self._ask_number("I2C frequency (Hz):", 10000, 1000000, 100000)
             if speed:
-                # SOFTWARE ACTION: Update config
                 self._update_config_value("I2C_FREQUENCY", str(speed))
                 return True
-        elif choice == "Check wiring diagram":
-            # PHYSICAL ACTION: User checks hardware
+        
+        # Check wiring
+        if self._ask_yes_no_custom(
+            "Check wiring connections?",
+            ok_label="✓ Check wiring",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             self._prompt_physical_action("Please check:\n- SDA/SCL connections\n- Pull-up resistors (4.7kΩ)\n- Power supply to sensor")
             return self._ask_yes_no("Wiring checked. Retry?")
         
@@ -858,25 +884,40 @@ class InteractiveSession:
     
     def _fix_sensor_issue(self, match: LogMatch) -> bool:
         """Fix sensor detection issues."""
-        choice = self._ask_choice("Sensor not detected. What would you like to do?", [
-            "Check sensor power/wiring",
-            "Try alternate I2C address",
-            "Skip sensor and continue",
-            "Use mock sensor data"
-        ])
-        
-        if choice == "Check sensor power/wiring":
-            # PHYSICAL ACTION: User checks hardware
+        # Binary decision tree
+        if self._ask_yes_no_custom(
+            "Sensor not detected. Check power/wiring?",
+            ok_label="✓ Check wiring",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             self._prompt_physical_action("Please check:\n- VCC and GND connections\n- Sensor power LED\n- Cable connections")
-            return self._ask_yes_no("Hardware checked. Retry?")
-        elif choice == "Try alternate I2C address":
+            if self._ask_yes_no("Hardware checked. Retry?"):
+                return True
+        
+        if self._ask_yes_no_custom(
+            "Try alternate I2C address?",
+            ok_label="✓ New address",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             return self._fix_i2c_issue(match)
-        elif choice == "Use mock sensor data":
-            # SOFTWARE ACTION: Enable mock mode
+        
+        if self._ask_yes_no_custom(
+            "Use mock sensor data?",
+            ok_label="✓ Use mock",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             self._update_config_value("USE_MOCK_SENSOR", "1")
             return True
-        elif choice == "Skip sensor and continue":
-            # SOFTWARE ACTION: Disable sensor
+        
+        if self._ask_yes_no_custom(
+            "Skip sensor and continue?",
+            ok_label="✓ Skip sensor",
+            cancel_label="✗ Keep trying",
+            prompt_type="TYPE 2"
+        ):
             self._update_config_value("SENSOR_ENABLED", "0")
             return True
         
@@ -884,20 +925,24 @@ class InteractiveSession:
     
     def _fix_heap_issue(self, match: LogMatch) -> bool:
         """Fix low heap memory issues - SOFTWARE ACTION."""
-        choice = self._ask_choice("Low heap memory detected. What would you like to do?", [
-            "Reduce buffer sizes",
-            "Enable PSRAM if available",
-            "Show memory analysis"
-        ])
-        
-        if choice == "Reduce buffer sizes":
+        # Binary decision tree
+        if self._ask_yes_no_custom(
+            "Low heap memory. Reduce buffer sizes?",
+            ok_label="✓ Reduce buffers",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             factor = self._ask_number("Buffer reduction factor (%):", 10, 90, 50)
             if factor:
-                # SOFTWARE ACTION: Update config
                 self._update_config_value("BUFFER_SIZE_FACTOR", str(factor))
                 return True
-        elif choice == "Enable PSRAM if available":
-            # SOFTWARE ACTION: Enable PSRAM
+        
+        if self._ask_yes_no_custom(
+            "Enable PSRAM if available?",
+            ok_label="✓ Enable PSRAM",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             self._update_config_value("PSRAM_ENABLED", "1")
             return True
         
@@ -905,19 +950,24 @@ class InteractiveSession:
     
     def _fix_watchdog_issue(self, match: LogMatch) -> bool:
         """Fix watchdog timeout issues - SOFTWARE ACTION."""
-        choice = self._ask_choice("Watchdog timeout detected. What would you like to do?", [
-            "Increase watchdog timeout",
-            "Add yield() calls in loops",
-            "Show task analysis"
-        ])
-        
-        if choice == "Increase watchdog timeout":
+        # Binary decision tree
+        if self._ask_yes_no_custom(
+            "Watchdog timeout. Increase timeout?",
+            ok_label="✓ Increase",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             timeout = self._ask_number("Watchdog timeout (seconds):", 1, 60, 5)
             if timeout:
-                # SOFTWARE ACTION: Update config
                 self._update_config_value("WATCHDOG_TIMEOUT", str(timeout))
                 return True
-        elif choice == "Add yield() calls in loops":
+        
+        if self._ask_yes_no_custom(
+            "Add yield() calls in loops?",
+            ok_label="✓ Add yields",
+            cancel_label="✗ Skip",
+            prompt_type="TYPE 2"
+        ):
             print("Please add vTaskDelay(1) or yield() calls in long-running loops")
             return self._ask_yes_no("Code updated. Continue?")
         
@@ -1247,44 +1297,38 @@ class InteractiveSession:
     def _ask_yes_no_with_description(self, question: str, timeout: Optional[int] = None) -> Tuple[bool, Optional[str]]:
         """
         Ask user yes/no question with option to describe what actually happened.
+        TYPE 2: Verification prompt - exactly 2 buttons.
         
         Returns:
             Tuple of (is_yes, description_if_no)
             - is_yes: True if user confirmed yes, False otherwise
             - description_if_no: User's description of what actually happened, or None if yes
         """
-        # Show choice dialog with three options
-        choice = self._ask_choice(
-            question + "\n\nSelect an option:",
-            [
-                "✓ YES - It's working correctly",
-                "✗ NO - Let me describe what actually happened",
-                "⊘ Cancel / Not sure"
-            ],
-            timeout=timeout
+        # First ask yes/no with exactly 2 buttons
+        is_working = self._ask_yes_no_custom(
+            question,
+            ok_label="✓ YES - Working",
+            cancel_label="✗ NO - Not working",
+            timeout=timeout,
+            prompt_type="TYPE 2"
         )
         
-        if choice == "✓ YES - It's working correctly":
+        if is_working:
             return True, None
-        elif choice == "✗ NO - Let me describe what actually happened":
-            # Ask user to describe what they observed
+        else:
+            # User said NO - now ask for description in separate prompt
             description = self._ask_input(
-                "Please describe what you actually see/hear/feel:\n\n" +
+                "What did you observe?\n\n" +
                 "Examples:\n" +
-                "- 'The LED is blinking but no sound'\n" +
-                "- 'Screen shows Error 404'\n" +
-                "- 'Motor vibrates but doesn't spin'\n" +
-                "- 'WiFi LED is off but router shows connection'\n\n" +
-                "What happened?",
+                "- 'LED blinking but no sound'\n" +
+                "- 'Screen shows error'\n" +
+                "- 'No response at all'",
                 ""
             )
             if description:
                 print(f"User observation: {description}")
                 self._log_event("physical_verification_failed", {"description": description})
             return False, description
-        else:
-            # Cancel or timeout
-            return False, None
     
     def _show_fix_instruction_prompt(self, pattern: str) -> Tuple[bool, Optional[str]]:
         """
