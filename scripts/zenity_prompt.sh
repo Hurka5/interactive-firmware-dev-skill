@@ -76,6 +76,8 @@ SCALE_MIN=0
 SCALE_MAX=100
 SCALE_DEFAULT=50
 TIMEOUT=""
+OK_LABEL=""
+CANCEL_LABEL=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -160,6 +162,14 @@ while [[ $# -gt 0 ]]; do
             TIMEOUT="$2"
             shift 2
             ;;
+        --ok-label)
+            OK_LABEL="$2"
+            shift 2
+            ;;
+        --cancel-label)
+            CANCEL_LABEL="$2"
+            shift 2
+            ;;
         --help)
             usage
             exit 0
@@ -184,15 +194,27 @@ fi
 # Execute appropriate dialog
 case $DIALOG_TYPE in
     question)
-        zenity --question \
-            --title="${TITLE}" \
-            --text="${MESSAGE}" \
-            --width="${WIDTH}" \
-            --height="${HEIGHT}" \
-            "${TIMEOUT_ARGS[@]}" \
-            --ok-label="Yes" \
-            --cancel-label="No" \
-            2>/dev/null
+        QUESTION_ARGS=(
+            --question
+            --title="${TITLE}"
+            --text="${MESSAGE}"
+            --width="${WIDTH}"
+            --height="${HEIGHT}"
+        )
+        if [[ -n "${TIMEOUT}" ]]; then
+            QUESTION_ARGS+=(--timeout="${TIMEOUT}")
+        fi
+        if [[ -n "${OK_LABEL}" ]]; then
+            QUESTION_ARGS+=(--ok-label="${OK_LABEL}")
+        else
+            QUESTION_ARGS+=(--ok-label="Yes")
+        fi
+        if [[ -n "${CANCEL_LABEL}" ]]; then
+            QUESTION_ARGS+=(--cancel-label="${CANCEL_LABEL}")
+        else
+            QUESTION_ARGS+=(--cancel-label="No")
+        fi
+        zenity "${QUESTION_ARGS[@]}" 2>/dev/null
         ;;
     
     error)

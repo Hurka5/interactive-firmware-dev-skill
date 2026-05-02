@@ -189,7 +189,7 @@ class InteractiveSession:
             with open(self.config.session_file, 'w') as f:
                 json.dump(session_data, f, indent=2)
     
-    def _zenity(self, dialog_type: str, *args, timeout: Optional[int] = None) -> Tuple[int, str]:
+    def _zenity(self, dialog_type: str, *args, timeout: Optional[int] = None, ok_label: Optional[str] = None, cancel_label: Optional[str] = None) -> Tuple[int, str]:
         """
         Execute a zenity dialog and return result.
         Only used for PHYSICAL actions that require user interaction.
@@ -198,6 +198,8 @@ class InteractiveSession:
             dialog_type: Type of dialog (info, error, question, entry, list, scale)
             args: Arguments for the dialog
             timeout: Optional timeout in seconds
+            ok_label: Custom label for OK button (question dialogs only)
+            cancel_label: Custom label for Cancel button (question dialogs only)
             
         Returns:
             Tuple of (exit_code, output_text)
@@ -206,6 +208,10 @@ class InteractiveSession:
         cmd = [str(self.zenity_script), f"--{dialog_type}"] + list(args)
         if timeout:
             cmd.extend(["--timeout", str(timeout)])
+        if ok_label:
+            cmd.extend(["--ok-label", ok_label])
+        if cancel_label:
+            cmd.extend(["--cancel-label", cancel_label])
         
         try:
             result = subprocess.run(
@@ -228,22 +234,20 @@ class InteractiveSession:
         - success: True if action performed, False if user couldn't do it
         - problem_description: User's explanation if they couldn't perform the action
         
-        TYPE 1 PROMPT: Must allow user to indicate if action failed!
+        TYPE 1 PROMPT: Exactly 2 buttons - "Done" and "Can't do it"
         """
-        # Use choice dialog instead of info - gives user option to indicate failure
-        choice = self._ask_choice(
-            message + "\n\nSelect your result:",
-            [
-                "✓ Done - I performed the action",
-                "❌ Can't do it - There's a problem"
-            ],
+        # Use question dialog with custom labels - exactly 2 buttons
+        done = self._ask_yes_no_custom(
+            message,
+            ok_label="✓ Done",
+            cancel_label="❌ Can't do it",
             timeout=60
         )
         
-        if choice == "✓ Done - I performed the action":
+        if done:
             return True, None
-        elif choice == "❌ Can't do it - There's a problem":
-            # User couldn't perform action - ask what went wrong
+        else:
+            # User clicked "Can't do it" - ask what went wrong
             problem = self._ask_input(
                 "❌ What prevented you from performing the action?\n\n"
                 "Examples:\n"
@@ -254,9 +258,6 @@ class InteractiveSession:
                 ""
             )
             return False, problem
-        else:
-            # Timeout or cancel - treat as failure
-            return False, "User did not confirm action completion"
     
     def _ask_yes_no(self, question: str, timeout: Optional[int] = None) -> bool:
         """Ask user a yes/no question. Returns True if yes/OK."""
@@ -269,6 +270,11 @@ class InteractiveSession:
         if code == 0:
             return choice
         return None
+    
+    def _ask_yes_no_custom(self, question: str, ok_label: str = "Yes", cancel_label: str = "No", timeout: Optional[int] = None) -> bool:
+        """Ask user a yes/no question with custom button labels. Returns True if OK/Yes."""
+        code, _ = self._zenity("question", question, timeout=timeout, ok_label=ok_label, cancel_label=cancel_label)
+        return code == 0
     
     def _ask_input(self, prompt: str, default: str = "") -> Optional[str]:
         """Ask user for text input."""
