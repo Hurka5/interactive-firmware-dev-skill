@@ -109,6 +109,25 @@ During firmware development and testing, the AI will occasionally need your help
    python3 --version
    ```
 
+3. **Graphical Display** - Zenity needs X11 or Wayland:
+   
+   **Important:** Zenity requires a graphical display to show popup dialogs.
+   
+   **If running over SSH:**
+   ```bash
+   # Enable X11 forwarding when connecting
+   ssh -X user@remote-host
+   # or
+   ssh -Y user@remote-host
+   ```
+   
+   **If no display available:**
+   - Run in a graphical terminal locally (not headless SSH)
+   - Use VNC or remote desktop
+   - For WSL: Install VcXsrv on Windows and set `export DISPLAY=:0`
+   
+   **The skill will check for display availability and fail gracefully with instructions if not found.**
+
 ### Install the Skill
 
 **Method 1: Using npx (recommended)**

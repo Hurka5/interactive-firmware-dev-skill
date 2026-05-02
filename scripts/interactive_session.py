@@ -72,6 +72,33 @@ class SessionConfig:
     session_file: Optional[str] = None
 
 
+def check_display_available() -> bool:
+    """
+    Check if graphical display is available for Zenity dialogs.
+    
+    Returns:
+        bool: True if display is available, False otherwise
+    """
+    # Check for DISPLAY environment variable (X11)
+    if os.environ.get('DISPLAY'):
+        return True
+    
+    # Check for Wayland
+    if os.environ.get('WAYLAND_DISPLAY'):
+        return True
+    
+    # Try to run a simple zenity command to test
+    try:
+        result = subprocess.run(
+            ['zenity', '--info', '--text=Test', '--timeout=1'],
+            capture_output=True,
+            timeout=2
+        )
+        return result.returncode == 0
+    except:
+        return False
+
+
 class InteractiveSession:
     """
     Manages an interactive firmware development session.
@@ -794,6 +821,24 @@ class InteractiveSession:
         dialogs are shown for physical actions.
         """
         import time
+        
+        # Check that display is available for Zenity
+        if not check_display_available():
+            print("=" * 60, file=sys.stderr)
+            print("ERROR: No graphical display available!", file=sys.stderr)
+            print("=" * 60, file=sys.stderr)
+            print(file=sys.stderr)
+            print("Zenity requires a graphical display (X11 or Wayland) to show dialogs.", file=sys.stderr)
+            print(file=sys.stderr)
+            print("Solutions:", file=sys.stderr)
+            print("  1. Run in a graphical terminal (not SSH without X11)", file=sys.stderr)
+            print("  2. Use SSH with X11 forwarding: ssh -X user@host", file=sys.stderr)
+            print("  3. Set DISPLAY variable: export DISPLAY=:0", file=sys.stderr)
+            print("  4. For WSL: Install VcXsrv and set DISPLAY", file=sys.stderr)
+            print(file=sys.stderr)
+            print("See: https://github.com/Hurka5/interactive-firmware-dev-skill#display-requirements", file=sys.stderr)
+            print("=" * 60, file=sys.stderr)
+            sys.exit(1)
         
         # Print session info to console (not zenity)
         print("=" * 60)

@@ -198,6 +198,134 @@ ssid = result.stdout.strip()
 | Get number input | `int(input("Enter value: "))` | `zenity --scale` |
 | Show error | `print("Error!")` | `zenity --error` |
 
+## ⚠️ CRITICAL: Display Environment Required
+
+### Zenity Needs a Display
+
+**Zenity requires a graphical display (X11 or Wayland) to show dialogs.**
+
+### Check Display Availability
+
+**Before using Zenity, verify a display is available:**
+
+```python
+import os
+import subprocess
+
+def check_display_available():
+    """Check if graphical display is available for Zenity."""
+    # Check for DISPLAY environment variable (X11)
+    if os.environ.get('DISPLAY'):
+        return True
+    
+    # Check for Wayland
+    if os.environ.get('WAYLAND_DISPLAY'):
+        return True
+    
+    # Try to run a simple zenity command to test
+    try:
+        result = subprocess.run(
+            ['zenity', '--info', '--text=Test', '--timeout=1'],
+            capture_output=True,
+            timeout=2
+        )
+        return result.returncode == 0
+    except:
+        return False
+
+# Use at start of session
+if not check_display_available():
+    print("ERROR: No display available for Zenity dialogs!")
+    print("Please run in a graphical environment or set up X11 forwarding.")
+    print("See: https://github.com/Hurka5/interactive-firmware-dev-skill#display-requirements")
+    sys.exit(1)
+```
+
+### Common Issues and Solutions
+
+**Problem: "The zenity dialogs aren't showing output"**
+
+**Cause:** Running in a headless environment (SSH without X11, container, CI/CD, etc.)
+
+**Solutions:**
+
+1. **Run in a graphical terminal (Recommended)**
+   ```bash
+   # Use a terminal emulator with display support
+   gnome-terminal  # or konsole, xterm, etc.
+   ./scripts/interactive_session.py --project ./my_project
+   ```
+
+2. **Enable X11 forwarding over SSH**
+   ```bash
+   # On local machine, connect with X11 forwarding
+   ssh -X user@remote-host
+   
+   # Or use -Y for trusted X11 forwarding
+   ssh -Y user@remote-host
+   
+   # Then run the skill
+   ./scripts/interactive_session.py --project ./my_project
+   ```
+
+3. **Set DISPLAY variable manually**
+   ```bash
+   # If display is :0
+   export DISPLAY=:0
+   
+   # If running as different user (e.g., root)
+   export DISPLAY=:0
+   xhost +local:root  # Allow root to use display
+   ```
+
+4. **Use VNC or remote desktop**
+   ```bash
+   # Connect via VNC for full graphical environment
+   # Then run the skill in the VNC session
+   ```
+
+5. **For WSL on Windows**
+   ```bash
+   # Install VcXsrv or Xming on Windows
+   # In WSL, set DISPLAY to Windows host
+   export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'):0
+   export LIBGL_ALWAYS_INDIRECT=1
+   ```
+
+### NEVER Fall Back to Text Input
+
+**❌ WRONG - Falling back to text when Zenity fails:**
+```python
+# DON'T DO THIS
+try:
+    subprocess.run(["zenity", "--info", "--text=Tap card"])
+except:
+    # ❌ NEVER FALL BACK TO INPUT()
+    response = input("Tap the card (press Enter when done): ")  # NO!
+```
+
+**✅ RIGHT - Fail with clear error message:**
+```python
+# CORRECT: Check display first, fail gracefully if not available
+if not check_display_available():
+    print("ERROR: Cannot show Zenity dialogs - no display available!")
+    print("Please run in a graphical environment.")
+    sys.exit(1)
+
+# Then use Zenity normally
+subprocess.run(["./scripts/zenity_prompt.sh", "--info", 
+                "Please tap the NFC card"])
+```
+
+### The Rule
+
+**Zenity is the ONLY allowed user interaction method.**
+
+- If display is available → Use Zenity ✓
+- If no display available → **Fail with error**, don't use text input ❌
+- User must run in graphical environment, or use X11 forwarding
+- **Never** fall back to `input()`, `getpass`, or CLI prompts
+
 ### The Golden Rule
 **If the AI needs to interact with the user, it MUST use Zenity. No exceptions.**
 
