@@ -268,13 +268,6 @@ class InteractiveSession:
         code, _ = self._zenity("question", question, timeout=timeout, title="[TYPE 2] Verification")
         return code == 0
     
-    def _ask_choice(self, question: str, options: List[str], timeout: Optional[int] = None) -> Optional[str]:
-        """Ask user to choose from a list of options."""
-        code, choice = self._zenity("list", question, *options, timeout=timeout, title="[TYPE 2] Selection")
-        if code == 0:
-            return choice
-        return None
-    
     def _ask_yes_no_custom(self, question: str, ok_label: str = "Yes", cancel_label: str = "No", timeout: Optional[int] = None, prompt_type: str = "TYPE 2") -> bool:
         """Ask user a yes/no question with custom button labels. Returns True if OK/Yes."""
         code, _ = self._zenity("question", question, timeout=timeout, ok_label=ok_label, cancel_label=cancel_label, title=f"[{prompt_type}] Decision")
@@ -304,8 +297,8 @@ class InteractiveSession:
         return None
     
     def _ask_number(self, prompt: str, min_val: int, max_val: int, default: int) -> Optional[int]:
-        """Ask user for a number using a scale slider."""
-        code, value = self._zenity("scale", prompt, str(min_val), str(max_val), str(default))
+        """Ask user for a number using a scale slider (TYPE 2 - numeric input)."""
+        code, value = self._zenity("scale", prompt, str(min_val), str(max_val), str(default), title="[TYPE 2] Numeric Input")
         if code == 0 and value:
             try:
                 return int(value)
