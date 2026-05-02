@@ -176,20 +176,20 @@ done
 check_zenity
 
 # Build timeout args if specified
-TIMEOUT_ARGS=""
+TIMEOUT_ARGS=()
 if [[ -n "$TIMEOUT" ]]; then
-    TIMEOUT_ARGS="--timeout=$TIMEOUT"
+    TIMEOUT_ARGS=("--timeout=$TIMEOUT")
 fi
 
 # Execute appropriate dialog
 case $DIALOG_TYPE in
     question)
         zenity --question \
-            --title="$TITLE" \
-            --text="$MESSAGE" \
-            --width=$WIDTH \
-            --height=$HEIGHT \
-            $TIMEOUT_ARGS \
+            --title="${TITLE}" \
+            --text="${MESSAGE}" \
+            --width="${WIDTH}" \
+            --height="${HEIGHT}" \
+            "${TIMEOUT_ARGS[@]}" \
             --ok-label="Yes" \
             --cancel-label="No" \
             2>/dev/null
@@ -197,48 +197,48 @@ case $DIALOG_TYPE in
     
     error)
         zenity --error \
-            --title="$TITLE - Error" \
-            --text="$MESSAGE" \
-            --width=$WIDTH \
-            --height=$HEIGHT \
-            $TIMEOUT_ARGS \
+            --title="${TITLE} - Error" \
+            --text="${MESSAGE}" \
+            --width="${WIDTH}" \
+            --height="${HEIGHT}" \
+            "${TIMEOUT_ARGS[@]}" \
             --no-wrap \
             2>/dev/null
         ;;
     
     info)
         zenity --info \
-            --title="$TITLE" \
-            --text="$MESSAGE" \
-            --width=$WIDTH \
-            --height=$HEIGHT \
-            $TIMEOUT_ARGS \
+            --title="${TITLE}" \
+            --text="${MESSAGE}" \
+            --width="${WIDTH}" \
+            --height="${HEIGHT}" \
+            "${TIMEOUT_ARGS[@]}" \
             2>/dev/null
         ;;
     
     warning)
         zenity --warning \
-            --title="$TITLE - Warning" \
-            --text="$MESSAGE" \
-            --width=$WIDTH \
-            --height=$HEIGHT \
-            $TIMEOUT_ARGS \
+            --title="${TITLE} - Warning" \
+            --text="${MESSAGE}" \
+            --width="${WIDTH}" \
+            --height="${HEIGHT}" \
+            "${TIMEOUT_ARGS[@]}" \
             2>/dev/null
         ;;
     
     entry)
         ENTRY_ARGS=(
             --entry
-            --title="$TITLE"
-            --text="$MESSAGE"
-            --width=$WIDTH
-            --height=$HEIGHT
+            --title="${TITLE}"
+            --text="${MESSAGE}"
+            --width="${WIDTH}"
+            --height="${HEIGHT}"
         )
-        if [[ -n "$TIMEOUT" ]]; then
-            ENTRY_ARGS+=(--timeout="$TIMEOUT")
+        if [[ -n "${TIMEOUT}" ]]; then
+            ENTRY_ARGS+=(--timeout="${TIMEOUT}")
         fi
-        if [[ -n "$DEFAULT_VALUE" ]]; then
-            ENTRY_ARGS+=(--entry-text="$DEFAULT_VALUE")
+        if [[ -n "${DEFAULT_VALUE}" ]]; then
+            ENTRY_ARGS+=(--entry-text="${DEFAULT_VALUE}")
         fi
         zenity "${ENTRY_ARGS[@]}" 2>/dev/null
         ;;
@@ -246,49 +246,49 @@ case $DIALOG_TYPE in
     list)
         LIST_ARGS=(
             --list
-            --title="$TITLE"
-            --text="$MESSAGE"
-            --width=$WIDTH
+            --title="${TITLE}"
+            --text="${MESSAGE}"
+            --width="${WIDTH}"
             --height=$((HEIGHT + ${#LIST_ITEMS[@]} * 30))
             --column="Option"
         )
-        if [[ -n "$TIMEOUT" ]]; then
-            LIST_ARGS+=(--timeout="$TIMEOUT")
+        if [[ -n "${TIMEOUT}" ]]; then
+            LIST_ARGS+=(--timeout="${TIMEOUT}")
         fi
         for item in "${LIST_ITEMS[@]}"; do
-            LIST_ARGS+=("$item")
+            LIST_ARGS+=("${item}")
         done
         zenity "${LIST_ARGS[@]}" 2>/dev/null
         ;;
     
     scale)
         zenity --scale \
-            --title="$TITLE" \
-            --text="$MESSAGE" \
-            --min-value="$SCALE_MIN" \
-            --max-value="$SCALE_MAX" \
-            --value="$SCALE_DEFAULT" \
-            --width=$WIDTH \
-            $TIMEOUT_ARGS \
+            --title="${TITLE}" \
+            --text="${MESSAGE}" \
+            --min-value="${SCALE_MIN}" \
+            --max-value="${SCALE_MAX}" \
+            --value="${SCALE_DEFAULT}" \
+            --width="${WIDTH}" \
+            "${TIMEOUT_ARGS[@]}" \
             2>/dev/null
         ;;
     
     file)
         zenity --file-selection \
-            --title="$TITLE" \
-            --width=$WIDTH \
-            --height=$HEIGHT \
-            $TIMEOUT_ARGS \
+            --title="${TITLE}" \
+            --width="${WIDTH}" \
+            --height="${HEIGHT}" \
+            "${TIMEOUT_ARGS[@]}" \
             2>/dev/null
         ;;
     
     progress)
         zenity --progress \
-            --title="$TITLE" \
-            --text="$MESSAGE" \
-            --width=$WIDTH \
+            --title="${TITLE}" \
+            --text="${MESSAGE}" \
+            --width="${WIDTH}" \
             --pulsate \
-            $TIMEOUT_ARGS \
+            "${TIMEOUT_ARGS[@]}" \
             2>/dev/null
         ;;
     

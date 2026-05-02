@@ -61,6 +61,314 @@ This is the standard way to test firmware with physical hardware. The AI uses re
 - Adjusting trim pots
 - Triggering sensors manually
 
+## Physical Verification (Don't Trust Logs)
+
+**CRITICAL PRINCIPLE: For physical outcomes, ASK THE USER - don't judge from logs!**
+
+### The Problem with Log-Based Verification
+
+❌ **WRONG - Judging from logs:**
+```
+AI: [Sees "WiFi connected" in logs]
+AI: "Great! WiFi is working now!"
+[Actually: User can't see any network activity, LED is off]
+```
+
+✅ **RIGHT - Asking user about physical outcome:**
+```
+AI: "Is the device now connected to Wi-Fi? 
+     (Check: Wi-Fi LED, connection status, or try pinging the device)"
+User: [Looks at LED, checks router] "Yes!"
+AI: "✓ Physical verification passed - fix successful!"
+```
+
+### When Things Don't Work - Describe What You See
+
+**When the answer is NO, the user describes what actually happened:**
+
+```
+AI: "Is the music playing?"
+User: [Clicks "NO - Let me describe what happened"]
+AI: [Shows text entry] "Please describe what you actually see/hear"
+User: "The LED is blinking but no sound comes out"
+AI: "Got it - LED works but audio doesn't. Let me check the speaker configuration..."
+```
+
+**This gives the AI much better diagnostic information than just a "No"!**
+
+### When to Ask Physical Verification
+
+**Always ask user to verify physical outcome for:**
+- WiFi/Bluetooth connections (check LEDs, actual connectivity)
+- Audio playback ("Is the music playing?")
+- LED brightness ("Is the LED bright?")
+- Motor movement ("Is the motor spinning?")
+- Sensor readings ("Is the sensor detecting?")
+- Display output ("Is the screen showing correctly?")
+
+### Physical Verification Questions by Type
+
+| Pattern | Verification Question |
+|---------|----------------------|
+| `wifi_fail` | "Is the device now connected to Wi-Fi? (Check: Wi-Fi LED, connection status)" |
+| `i2c_fail` | "Is the I2C device now responding? (Check: Sensor readings, data transmission)" |
+| `sensor_fail` | "Is the sensor now working? (Check: Sensor LED, data output)" |
+| NFC checkpoint | "Did the device detect the card? (Check: LED blink, beep, or screen update)" |
+| Button checkpoint | "Did the device respond? (Check: LED, sound, or action)" |
+| Encoder checkpoint | "Did the value change? (Check: Display update or LED brightness)" |
+
+### Prompt Types (Exactly 2 Types)
+
+**CRITICAL RULES:**
+1. **Walk user through steps ONE BY ONE** - Don't show lists
+2. **ONLY ONE action per prompt** - No numbered lists, no "and"
+3. **Keep it simple** - One focused instruction
+
+**Every test has at least 2 steps:**
+1. **What to do** (Instruction) - ONE action only
+2. **Is it happening** (Verification) - ONE observation only
+
+---
+
+**TYPE 1: Instruction Prompt**
+Tells user what to do. **ONE action only.**
+
+```
+📋 NFC Card Test
+
+👉 Tap the NFC card on the reader
+
+Click OK when done.
+
+[OK button]
+```
+
+**❌ NEVER DO THIS (list of actions):**
+```
+🔧 TEST: NFC Card Detection
+
+📋 PHYSICAL ACTION NEEDED:
+👉 Place Card B on the NFC reader
+
+Click OK when done.
+```
+
+**TYPE 2: Verification Prompt**
+Asks if it worked. **ONE simple question.**
+
+```
+📋 NFC Card Test
+
+Did the NFC card trigger a response?
+
+[YES button]  [NO button]
+```
+
+**If user clicks NO:**
+```
+❌ Something is not right.
+
+Please describe what you observe:
+(What do you see/hear/feel instead of the expected behavior?)
+
+Your observation: [text input field]
+
+[OK button]
+```
+
+**Then agent asks what to do next:**
+```
+Problem reported: LED blinks but no beep
+
+What would you like to do?
+
+[🔄 Retry this step]
+[🔧 Check hardware connections]
+[⏭️  Skip to next step]
+[❌ Abort session]
+```
+
+### Walk Through One By One (Not Lists)
+
+**❌ WRONG - Showing list of all steps:**
+```
+📍 ALL STEPS:
+  Step 1: Flash firmware
+  Step 2: Reset device
+➤ Step 3: NFC card test ← YOU ARE HERE
+  Step 4: Button test
+  Step 5: Verify results
+```
+
+**✅ RIGHT - Walking through one step at a time:**
+```
+📋 NFC Card Test
+
+🎯 WHAT TO DO:
+Tap the NFC card on the reader...
+
+[OK]
+
+[After user clicks OK]
+
+📋 NFC Card Test - Verification
+
+👁️  IS IT HAPPENING?
+NFC card detected...
+
+[YES] [NO]
+```
+
+**Why this matters:**
+- User focuses on ONE thing at a time
+- No information overload
+- Clear what to do RIGHT NOW
+- Natural conversation flow
+- Not overwhelmed by multiple steps
+
+**NEVER create lists of physical actions. Show ONE action only.**
+
+### Checkpoint Flow (Minimal Monitoring Time)
+
+**Key Principle: Monitor for the minimal amount of time. If the user can help make something happen faster, ask them to do it.**
+
+For each checkpoint:
+1. **Instruction** - tells user what to do ("Perform the action NOW!")
+2. **Brief monitoring** - 15 seconds max with proactive prompting
+3. **Verification** - asks if it worked (YES/NO)
+
+**Proactive Prompting:**
+If the user hasn't acted within 3 seconds, the AI shows:
+```
+⏱️ Taking longer than expected...
+
+Please tap the NFC card NOW to speed up the test.
+Hold it near the reader for 1-2 seconds.
+```
+
+**Why this matters:**
+- Don't wait indefinitely for logs
+- User can trigger events faster than waiting
+- 15-second timeout keeps testing moving
+- Proactive prompts remind user to act quickly
+
+If NO: agent stops, user describes problem, then agent asks what to do next.
+
+### Fix Verification Flow (2 Prompt Types)
+
+After applying a fix, the AI uses the same 2 prompt types:
+
+**TYPE 1: Instruction Prompt - What to check**
+```
+🔧 Wi-Fi Fix
+
+👉 Check the Wi-Fi LED
+
+Click OK when checked.
+
+[OK button]
+```
+
+**TYPE 2: Verification Prompt - Is it working?**
+```
+🔧 Wi-Fi Fix
+
+Is Wi-Fi working?
+
+[YES button]  [NO button]
+```
+
+**If NO: Agent stops and waits for user input**
+```
+❌ The fix didn't work.
+
+Please describe what you observe:
+(What do you see/hear/feel instead of the expected behavior?)
+
+Your observation: [text input]
+
+[OK button]
+```
+
+**Then agent asks what to do:**
+```
+Problem reported: WiFi LED is off
+
+Would you like to try a different approach?
+
+[YES, try different fix]  [NO, abort]
+```
+
+## Minimal Monitoring Time
+
+**Don't wait passively - ask the user to speed things up!**
+
+### The Problem with Passive Monitoring
+
+❌ **WRONG - Waiting indefinitely:**
+```
+AI: [Waits 60 seconds for NFC card detection]
+User: [Doesn't know they need to tap the card]
+[Time wasted]
+```
+
+✅ **RIGHT - Proactive prompting:**
+```
+AI: "Please tap the NFC card NOW to speed up the test"
+User: [Immediately taps card]
+AI: [Detects in 2 seconds] "✓ Card detected!"
+```
+
+### How It Works
+
+**Timeout Strategy:**
+- **15 seconds max** for physical action checkpoints
+- **3-second threshold** for proactive prompt
+- User is told "Perform the action NOW!"
+
+**Proactive Prompt Example:**
+```
+[⏱️ Monitoring for 15s... Perform the action now!]
+
+[After 3 seconds if no response]
+⏱️ Taking longer than expected...
+
+Please tap the NFC card NOW to speed up the test.
+Hold it near the reader for 1-2 seconds.
+```
+
+### Why This Matters
+
+1. **User can trigger events faster** than waiting for random timing
+2. **15 seconds is enough** for most physical interactions
+3. **Proactive prompts** remind user to act immediately
+4. **No indefinite waiting** - keeps testing efficient
+
+**Rule: Monitor minimally. Prompt proactively. Speed up testing.**
+
+---
+
+**Rule: Exactly 2 prompt types. Never combine instruction and question.**
+
+### User Description Examples
+
+When the device doesn't work as expected, users can describe:
+- **"The LED is blinking but no sound"** → Audio output issue
+- **"Screen shows Error 404"** → Wrong endpoint/configuration
+- **"Motor vibrates but doesn't spin"** → Insufficient power/mechanical issue
+- **"WiFi LED is off but router shows connection"** → LED driver issue
+- **"Card beeps but no data appears"** → Data parsing issue
+
+### CLI Option
+
+```bash
+# Physical verification enabled (default)
+python interactive_session.py
+
+# Disable physical verification (rely on logs only)
+python interactive_session.py --no-physical-verify
+```
+
 ## Default Testing Behavior
 
 **This skill is the DEFAULT for all firmware testing.**
@@ -601,25 +909,21 @@ Only say what matters. Remove fluff.
 
 Testing if the PN532 reader can detect MIFARE Classic cards.
 
-📋 What to do: Tap the WHITE card on the reader
-⏱️  Timing: Hold for 2 seconds
-
-✓ Expected: Blue LED lights up + log shows "Card detected"
-
-This verifies the I2C communication and antenna are working.
-```
-
-**✅ RIGHT - Concise:**
-```
-🔧 TEST: Card Detection
-
 📋 Tap the WHITE card on the reader
-⏱️  Hold 2 seconds until LED lights up
+
+Click OK when done.
 ```
 
-**Even more concise (when context is clear):**
+**✅ RIGHT - ONE action only:**
 ```
-📋 Tap the white card
+📋 Tap the WHITE card on the reader
+
+Click OK when done.
+```
+
+**Even more concise:**
+```
+👉 Tap the white card
 ```
 
 ### When to Add Context
@@ -665,74 +969,27 @@ Add context only when it matters to the test:
 
 ### Example Prompts
 
-**NFC Card Testing:**
+**NFC Card Testing (Simplified - ONE action):**
 ```
-🔧 PHYSICAL ACTION REQUIRED
+📋 Tap the NFC card on the reader
 
-Step 2 of 5: Present NFC Card
-
-Please tap the NFC card on the reader module.
-
-📍 Location: The white rectangular PN532 module 
-            near the center of the breadboard
-⏱️  Timing: Hold the card on the reader for 1-2 seconds
-
-Expected: Blue LED will light up when card is detected
-
-         [ NFC CARD ]
-            |
-            v
-    ┌───────────────┐
-    │  PN532 MODULE │
-    │   [ANTENNA]   │
-    └───────────────┘
-
-Click OK when the card is on the reader.
+Click OK when done.
 ```
 
-**Rotary Encoder:**
+**Rotary Encoder (Simplified - ONE action):**
 ```
-🔧 PHYSICAL ACTION REQUIRED
+📋 Rotate the encoder CLOCKWISE 3 clicks
 
-Step 3 of 4: Adjust Volume
-
-Please rotate the volume encoder.
-
-📍 Location: The blue rotary encoder on the right side
-            of the control panel
-⏱️  Action: Rotate CLOCKWISE exactly 3 detents (clicks)
-
-Current volume: 50%
-Target volume: 80%
-
-    ⬆️
-  ┌───┐
-  │ ⬆️ │  ← Rotate this way
-  └───┘
-    ⬇️
-
-Click OK after rotating 3 clicks clockwise.
+Click OK when done.
 ```
 
-**Hardware Reset:**
+**Hardware Reset (Simplified - ONE action):**
 ```
-🔧 PHYSICAL ACTION REQUIRED
+🔧 Hardware Reset Required
 
-Step 1 of 3: Hardware Reset
+👉 Unplug USB cable, wait 3 seconds, then plug it back in
 
-Please power cycle the device.
-
-📍 Location: USB cable connected to the ESP32 devkit
-⏱️  Action: 
-   1. Unplug the USB cable
-   2. Wait 3 seconds
-   3. Plug the USB cable back in
-
-⚠️  Note: This is a hardware power cycle, not a software reset
-   which I could do automatically. Physical reset is needed
-   to clear the persistent error state.
-
-Click OK when the device has rebooted (you'll see the boot messages).
+Click OK when device has rebooted.
 ```
 
 ## Direct Testing Approach
@@ -753,18 +1010,13 @@ Every prompt should clearly state:
 "Please tap the card"
 ```
 
-**✅ GOOD: Context-aware prompt**
+**✅ GOOD: Simple, focused prompt (ONE action only)**
 ```
-🔧 TEST: NFC Card Detection
+📋 NFC Card Test
 
-I'm testing if the PN532 reader can detect MIFARE Classic cards.
+👉 Tap the WHITE card on the reader
 
-📋 What to do: Tap the WHITE card on the reader
-⏱️  Timing: Hold for 2 seconds
-
-✓ Expected: Blue LED lights up + log shows "Card detected"
-
-This verifies the I2C communication and antenna are working.
+Click OK when done.
 ```
 
 ### Testing with Timing/Sequence
@@ -776,25 +1028,17 @@ When testing sequences (like tap-and-remove), explain the full flow:
 
 Testing the reader's ability to detect when cards arrive and leave.
 
-📋 Step 1: Tap the card and HOLD it
-⏱️  Keep holding while I verify detection...
+📋 Tap the card and hold it
 
-✓ Expected: "Card detected" in logs
-
-[User clicks OK after seeing detection]
+Click OK when you see "Card detected" in the logs.
 
 ---
 
 🔧 TEST: Card Removal Detection
 
-Now testing if the reader detects when the card is removed.
+📋 Remove the card now
 
-📋 Step 2: REMOVE the card now
-⏱️  Remove completely (10cm away)
-
-✓ Expected: "Card removed" in logs
-
-This tests the presence detection loop.
+Click OK when you see "Card removed" in the logs.
 ```
 
 ### Error Recovery: Ask What Happened
@@ -894,14 +1138,13 @@ This helps me adapt the test to your actual hardware.
 ```
 🔧 TEST: Audio Output
 
-📋 Wait until you hear the beep, then click OK
-⏱️  Sound will play in 2-3 seconds
+📋 Wait for the beep, then click OK
 
 [Sound plays, user clicks OK]
 ✓ Audio output working
 ```
 
-📋 Step 3: You can remove the card
+📋 Remove the card
 
 This verifies the full read/write communication chain.
 ```
@@ -1101,10 +1344,9 @@ AI: Re-flashing firmware... ✓
 
 [Zenity] 🔧 TEST: Button Press Detection (Retry)
 
-Let's try again. The USER button is the small black button next to the RESET button.
+Let's try again. The USER button is the small black button next to RESET.
 
-📋 Action: Press the USER button (not RESET!)
-   USER button location: [diagram showing board]
+👉 Press the USER button (not RESET!)
 
 User: [Presses correct button, clicks OK]
 
@@ -1123,10 +1365,7 @@ AI: Monitoring logs...
 
 [Zenity] 🔧 TEST: Encoder Rotation
 
-Testing encoder clockwise rotation.
-
-📋 Action: Rotate the encoder CLOCKWISE 3 clicks
-📊 Current position: 50
+👉 Rotate the encoder CLOCKWISE 3 clicks
 
 User: [Rotates counter-clockwise instead]
 
@@ -1231,9 +1470,7 @@ for i in range(5):
 if persistent_error_requires_hardware_reset:
     zenity_info(
         "Hardware reset required.\n\n"
-        "1. Unplug USB cable\n"
-        "2. Wait 3 seconds\n" 
-        "3. Plug USB cable back in\n\n"
+        "👉 Unplug USB cable, wait 3 seconds, then plug it back in\n\n"
         "Click OK when device has rebooted"
     )
     # AI waits for boot messages
@@ -1248,11 +1485,11 @@ zenity --info \
   --text="Please tap the NFC card on the reader, then click OK."
 ```
 
-### With Details
+### With Details (Simplified - ONE action only)
 ```bash
 zenity --info \
-  --title="Step 2 of 4: Rotate Encoder" \
-  --text="<b>Physical Action Required</b>\n\nPlease rotate the volume encoder <b>clockwise 3 clicks</b>.\n\n📍 Location: Blue encoder on the right side\n⏱️  Timing: Rotate until you feel 3 detents" \
+  --title="Rotate Encoder" \
+  --text="👉 Rotate the volume encoder clockwise 3 clicks\n\nClick OK when done." \
   --width=400
 ```
 
