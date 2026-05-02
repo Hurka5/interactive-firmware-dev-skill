@@ -19,7 +19,11 @@ def test_all_prompts():
     config = SessionConfig(
         project_path="/tmp/test",
         port="/dev/ttyUSB0",
-        patterns={}
+        baud=115200,
+        target="esp32",
+        platform="esp-idf",
+        patterns={},
+        auto_fix=False
     )
     
     session = InteractiveSession(config)
