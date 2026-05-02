@@ -393,6 +393,67 @@ Possible reasons:
 [ ] Something else
 ```
 
+### Handling Physical Problems
+
+When the device reports a physical problem (not a software error), use Zenity to ask the user to fix it:
+
+**Scenario: NFC card not detected when it should be present**
+```
+[Console] AI: Log: "ERROR: Card not found"
+[Console] AI: Log: "Expected card at reader but none detected"
+
+⚠️  PHYSICAL PROBLEM DETECTED
+
+The device reports no NFC card is present, but the test requires a card.
+
+📋 Please place the NFC card on the reader now
+
+[User places card, clicks OK]
+
+[Console] AI: Log: "Card detected! UID: 0xA1B2C3D4"
+[Console] AI: ✓ Problem resolved
+```
+
+**Scenario: Sensor not responding**
+```
+[Console] AI: Log: "ERROR: PIR sensor timeout"
+[Console] AI: Log: "No motion detected for 30 seconds"
+
+⚠️  SENSOR NOT TRIGGERED
+
+The motion sensor hasn't detected anything. Please trigger it.
+
+📋 Wave your hand in front of the PIR sensor
+⏱️  Then click OK
+
+[User waves hand, clicks OK]
+
+[Console] AI: Log: "Motion detected!"
+[Console] AI: ✓ Sensor working
+```
+
+**Scenario: Wrong hardware state**
+```
+[Console] AI: Log: "ERROR: Expected button HIGH, got LOW"
+[Console] AI: Log: "Button should be pressed for this test"
+
+⚠️  WRONG HARDWARE STATE
+
+The test requires the button to be pressed, but it's released.
+
+📋 Press and HOLD the USER button
+⏱️  Keep holding, then click OK
+
+[User presses button, clicks OK]
+
+[Console] AI: Log: "Button state: HIGH"
+[Console] AI: ✓ Correct state achieved
+```
+
+**The Rule:**
+- Software problems → AI fixes automatically (config changes, code fixes)
+- Physical problems → AI prompts user via Zenity to fix (move card, press button, etc.)
+
 **Scenario: Unexpected behavior**
 ```
 ⚠️  Unexpected: Got "Card removed" instead of "Card detected"
