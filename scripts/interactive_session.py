@@ -350,8 +350,8 @@ class InteractiveSession:
             # User chose not to auto-fix - ask if they want to check hardware
             if self._ask_yes_no_custom("Check hardware connections?", "✓ Check hardware", "✗ Abort", timeout=30):
                 self._log_event("user_decision", {"pattern": match.pattern}, "check_hardware")
-                # PHYSICAL ACTION: User checks hardware
-                self._prompt_physical_action("Please check:\n- Power supply\n- USB cable\n- Boot/reset connections\n- Peripheral wiring")
+                # PHYSICAL ACTION: User checks power supply first
+                self._prompt_physical_action("Check the power supply connection")
                 if self._ask_yes_no("Hardware checked. Retry?"):
                     self._restart_monitoring()
             else:
@@ -630,7 +630,7 @@ class InteractiveSession:
                             timeout=30,
                             prompt_type="TYPE 2"
                         ):
-                            self._prompt_physical_action("Please check:\n- Power connections\n- Signal wires\n- Component mounting\n- Battery level")
+                            self._prompt_physical_action("Check the power connections")
                             if self._ask_yes_no("Hardware checked. Retry this step?"):
                                 self._handle_info_match(match, context_msg)
                                 return
@@ -703,7 +703,7 @@ class InteractiveSession:
                         timeout=30,
                         prompt_type="TYPE 2"
                     ):
-                        self._prompt_physical_action("Please check:\n- Power connections\n- Signal wires\n- Component mounting\n- Battery level")
+                        self._prompt_physical_action("Check the power connections")
                         if self._ask_yes_no("Hardware checked. Retry this step?"):
                             self._handle_info_match(match, context_msg)
                             return
@@ -870,7 +870,7 @@ class InteractiveSession:
             cancel_label="✗ Skip",
             prompt_type="TYPE 2"
         ):
-            self._prompt_physical_action("Please check:\n- SDA/SCL connections\n- Pull-up resistors (4.7kΩ)\n- Power supply to sensor")
+            self._prompt_physical_action("Check the SDA/SCL connections")
             return self._ask_yes_no("Wiring checked. Retry?")
         
         return False
@@ -884,7 +884,7 @@ class InteractiveSession:
             cancel_label="✗ Skip",
             prompt_type="TYPE 2"
         ):
-            self._prompt_physical_action("Please check:\n- VCC and GND connections\n- Sensor power LED\n- Cable connections")
+            self._prompt_physical_action("Check the VCC and GND connections")
             if self._ask_yes_no("Hardware checked. Retry?"):
                 return True
         
@@ -1247,7 +1247,7 @@ class InteractiveSession:
         
         # Fallback: prompt user for hardware reset
         print("Please reset the device manually (press reset button or power cycle)")
-        self._prompt_physical_action("Please reset the device:\n- Press RESET button, OR\n- Power cycle (unplug/replug USB), OR\n- Click OK if already reset")
+        self._prompt_physical_action("Press the RESET button on the device")
         return True
     
     def _restart_monitoring(self):
@@ -1283,7 +1283,7 @@ class InteractiveSession:
     
     def _edit_configuration(self, match: LogMatch):
         """Open configuration for editing."""
-        self._prompt_physical_action("Please edit the configuration file and then click OK to retry.")
+        self._prompt_physical_action("Edit the configuration file")
         if self._ask_yes_no("Configuration updated. Retry?"):
             self._restart_monitoring()
     
