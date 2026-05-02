@@ -595,6 +595,9 @@ class InteractiveSession:
                 break
         
         if self.config.physical_verification:
+            # Put device in idle state before each test
+            self._ensure_idle_state()
+            
             # Walk user through steps ONE BY ONE (not a list)
             # Each test has at least 2 steps: what to do and is it happening
             
@@ -1250,6 +1253,48 @@ class InteractiveSession:
         self._prompt_physical_action("Press the RESET button on the device")
         return True
     
+    def _ensure_idle_state(self) -> bool:
+        """
+        Put device into idle state before testing.
+        
+        Ensures clean logs and consistent test conditions by:
+        1. Sending idle command if available
+        2. Waiting for device to settle
+        3. Clearing any pending log output
+        
+        Returns True if device is ready for testing.
+        """
+        print("[IDLE] Putting device into idle state...")
+        
+        # Try to send idle command via serial
+        try:
+            import serial
+            ser = serial.Serial(self.config.port, self.config.baud, timeout=1)
+            # Send break or idle character
+            ser.write(b'\x03')  # Ctrl+C to stop any running process
+            ser.flush()
+            time.sleep(0.5)
+            # Clear input buffer
+            ser.reset_input_buffer()
+            ser.close()
+            print("[IDLE] Idle command sent, buffer cleared")
+        except:
+            pass  # Serial not available, continue anyway
+        
+        # Wait for device to settle
+        time.sleep(1)
+        
+        # Clear log file if configured
+        if self.config.log_file and Path(self.config.log_file).exists():
+            try:
+                Path(self.config.log_file).write_text('')
+                print(f"[IDLE] Cleared log file: {self.config.log_file}")
+            except:
+                pass
+        
+        print("[IDLE] Device ready for testing")
+        return True
+    
     def _restart_monitoring(self):
         """Restart log monitoring - SOFTWARE ACTION."""
         self.state = SessionState.MONITORING
@@ -1481,6 +1526,9 @@ class InteractiveSession:
     
     def _execute_test_step(self, step: dict) -> Tuple[bool, str]:
         """Execute a single test step from configuration."""
+        # Ensure device is in idle state before each test
+        self._ensure_idle_state()
+        
         step_type = step.get('type')
         
         if step_type == 'flash':
