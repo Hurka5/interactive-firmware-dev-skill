@@ -189,7 +189,7 @@ class InteractiveSession:
             with open(self.config.session_file, 'w') as f:
                 json.dump(session_data, f, indent=2)
     
-    def _zenity(self, dialog_type: str, *args, timeout: Optional[int] = None, ok_label: Optional[str] = None, cancel_label: Optional[str] = None) -> Tuple[int, str]:
+    def _zenity(self, dialog_type: str, *args, timeout: Optional[int] = None, ok_label: Optional[str] = None, cancel_label: Optional[str] = None, title: Optional[str] = None) -> Tuple[int, str]:
         """
         Execute a zenity dialog and return result.
         Only used for PHYSICAL actions that require user interaction.
@@ -200,6 +200,7 @@ class InteractiveSession:
             timeout: Optional timeout in seconds
             ok_label: Custom label for OK button (question dialogs only)
             cancel_label: Custom label for Cancel button (question dialogs only)
+            title: Custom title for the dialog (prepended to default title)
             
         Returns:
             Tuple of (exit_code, output_text)
@@ -212,6 +213,8 @@ class InteractiveSession:
             cmd.extend(["--ok-label", ok_label])
         if cancel_label:
             cmd.extend(["--cancel-label", cancel_label])
+        if title:
+            cmd.extend(["--title", title])
         
         try:
             result = subprocess.run(
@@ -241,7 +244,8 @@ class InteractiveSession:
             message,
             ok_label="✓ Done",
             cancel_label="❌ Can't do it",
-            timeout=60
+            timeout=60,
+            prompt_type="TYPE 1"
         )
         
         if done:
@@ -260,28 +264,41 @@ class InteractiveSession:
             return False, problem
     
     def _ask_yes_no(self, question: str, timeout: Optional[int] = None) -> bool:
-        """Ask user a yes/no question. Returns True if yes/OK."""
-        code, _ = self._zenity("question", question, timeout=timeout)
+        """Ask user a yes/no question (TYPE 2). Returns True if yes/OK."""
+        code, _ = self._zenity("question", question, timeout=timeout, title="[TYPE 2] Verification")
         return code == 0
     
     def _ask_choice(self, question: str, options: List[str], timeout: Optional[int] = None) -> Optional[str]:
         """Ask user to choose from a list of options."""
-        code, choice = self._zenity("list", question, *options, timeout=timeout)
+        code, choice = self._zenity("list", question, *options, timeout=timeout, title="[TYPE 2] Selection")
         if code == 0:
             return choice
         return None
     
-    def _ask_yes_no_custom(self, question: str, ok_label: str = "Yes", cancel_label: str = "No", timeout: Optional[int] = None) -> bool:
+    def _ask_yes_no_custom(self, question: str, ok_label: str = "Yes", cancel_label: str = "No", timeout: Optional[int] = None, prompt_type: str = "TYPE 2") -> bool:
         """Ask user a yes/no question with custom button labels. Returns True if OK/Yes."""
-        code, _ = self._zenity("question", question, timeout=timeout, ok_label=ok_label, cancel_label=cancel_label)
+        code, _ = self._zenity("question", question, timeout=timeout, ok_label=ok_label, cancel_label=cancel_label, title=f"[{prompt_type}] Decision")
         return code == 0
     
+    def _prompt_physical_action(self, message: str, timeout: Optional[int] = None) -> bool:
+        """
+        Simple physical action prompt with exactly 2 buttons (TYPE 1).
+        Returns True if user confirms action is done, False otherwise.
+        """
+        return self._ask_yes_no_custom(
+            message,
+            ok_label="✓ Done",
+            cancel_label="Skip",
+            timeout=timeout or 60,
+            prompt_type="TYPE 1"
+        )
+    
     def _ask_input(self, prompt: str, default: str = "") -> Optional[str]:
-        """Ask user for text input."""
+        """Ask user for text input (TYPE 1 - problem description)."""
         args = [prompt]
         if default:
             args.append(default)
-        code, value = self._zenity("entry", *args)
+        code, value = self._zenity("entry", *args, title="[TYPE 1] Problem Description")
         if code == 0:
             return value
         return None
@@ -331,33 +348,21 @@ class InteractiveSession:
         For fatal errors, we may need physical intervention
         like hardware reset if software reset fails.
         """
-        message = f"FATAL ERROR DETECTED\n\nPattern: {match.pattern}\nLine: {match.log_line}{context_msg}\n\nWhat would you like to do?"
+        message = f"FATAL ERROR DETECTED\n\nPattern: {match.pattern}\nLine: {match.log_line}{context_msg}\n\nAttempt automatic fix?"
         
-        choice = self._ask_choice(message, [
-            "Inspect code and suggest fix",
-            "Increase stack size and retry",
-            "Check hardware connections",
-            "View full log context",
-            "Abort session"
-        ])
-        
-        if choice == "Inspect code and suggest fix":
-            self._log_event("user_decision", {"pattern": match.pattern}, "inspect_and_fix")
+        if self._ask_yes_no_custom(message, "✓ Fix automatically", "✗ Skip fix", timeout=60):
+            self._log_event("user_decision", {"pattern": match.pattern}, "auto_fix")
             self._apply_fix(match, "fatal")
-        elif choice == "Increase stack size and retry":
-            self._log_event("user_decision", {"pattern": match.pattern}, "increase_stack")
-            self._modify_stack_size()
-        elif choice == "Check hardware connections":
-            self._log_event("user_decision", {"pattern": match.pattern}, "check_hardware")
-            # PHYSICAL ACTION: User checks hardware
-            self._prompt_physical_action("Please check:\n- Power supply\n- USB cable\n- Boot/reset connections\n- Peripheral wiring")
-            if self._ask_yes_no("Hardware checked. Retry?"):
-                self._restart_monitoring()
-        elif choice == "View full log context":
-            print(f"Full context:\n{chr(10).join(match.context)}")
-            self._handle_fatal_error(match, "")  # Re-prompt
         else:
-            self._abort_session("User aborted after fatal error")
+            # User chose not to auto-fix - ask if they want to check hardware
+            if self._ask_yes_no_custom("Check hardware connections?", "✓ Check hardware", "✗ Abort", timeout=30):
+                self._log_event("user_decision", {"pattern": match.pattern}, "check_hardware")
+                # PHYSICAL ACTION: User checks hardware
+                self._prompt_physical_action("Please check:\n- Power supply\n- USB cable\n- Boot/reset connections\n- Peripheral wiring")
+                if self._ask_yes_no("Hardware checked. Retry?"):
+                    self._restart_monitoring()
+            else:
+                self._abort_session("User aborted after fatal error")
     
     def _handle_error(self, match: LogMatch, context_msg: str):
         """
@@ -366,53 +371,29 @@ class InteractiveSession:
         Most errors are handled automatically by the AI.
         Only prompt user if physical action is needed.
         """
-        message = f"ERROR DETECTED\n\nPattern: {match.pattern}\nLine: {match.log_line}{context_msg}\n\nWhat would you like to do?"
+        message = f"ERROR DETECTED\n\nPattern: {match.pattern}\nLine: {match.log_line}{context_msg}\n\nAttempt automatic fix?"
         
-        choice = self._ask_choice(message, [
-            "Fix the issue automatically",
-            "Show me the code to fix",
-            "Ignore and continue monitoring",
-            "Edit configuration",
-            "Abort session"
-        ], timeout=60)
-        
-        if choice == "Fix the issue automatically":
+        if self._ask_yes_no_custom(message, "✓ Fix automatically", "✗ Skip fix", timeout=60):
             # SOFTWARE ACTION: AI fixes automatically
             self._log_event("user_decision", {"pattern": match.pattern}, "auto_fix")
             self._apply_fix(match, "error")
-        elif choice == "Show me the code to fix":
-            self._log_event("user_decision", {"pattern": match.pattern}, "show_code")
-            self._show_relevant_code(match)
-        elif choice == "Ignore and continue monitoring":
-            self._log_event("user_decision", {"pattern": match.pattern}, "ignore")
-            self.state = SessionState.MONITORING
-        elif choice == "Edit configuration":
-            # SOFTWARE ACTION: AI updates config
-            self._log_event("user_decision", {"pattern": match.pattern}, "edit_config")
-            self._edit_configuration(match)
         else:
-            self._abort_session("User aborted")
+            # User chose not to auto-fix
+            if self._ask_yes_no_custom("Continue monitoring?", "✓ Continue", "✗ Abort", timeout=30):
+                self._log_event("user_decision", {"pattern": match.pattern}, "continue")
+                self.state = SessionState.MONITORING
+            else:
+                self._abort_session("User aborted")
     
     def _handle_warning(self, match: LogMatch, context_msg: str):
         """Handle warnings - usually handled automatically."""
         if not self.config.auto_fix:
             return
         
-        message = f"WARNING DETECTED\n\nPattern: {match.pattern}\nLine: {match.log_line}{context_msg}\n\nAction?"
+        message = f"WARNING DETECTED\n\nPattern: {match.pattern}\nLine: {match.log_line}{context_msg}\n\nFix this warning?"
         
-        choice = self._ask_choice(message, [
-            "Fix now",
-            "Continue monitoring",
-            "Suppress this warning"
-        ], timeout=30)
-        
-        if choice == "Fix now":
+        if self._ask_yes_no_custom(message, "✓ Fix now", "✗ Skip", timeout=30):
             self._apply_fix(match, "warning")
-        elif choice == "Suppress this warning":
-            self._log_event("user_decision", {"pattern": match.pattern}, "suppress")
-            # Remove pattern from watcher
-            if match.pattern in self.watcher.compiled_patterns:
-                del self.watcher.compiled_patterns[match.pattern]
         else:
             self._log_event("user_decision", {"pattern": match.pattern}, "continue")
     
